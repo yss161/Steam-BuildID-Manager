@@ -9,6 +9,7 @@ namespace SteamBuildIdManager.Views.Pages;
 public sealed partial class SettingsPage : Page
 {
     private readonly SettingsService _settingsService = new();
+    private readonly SteamLoginUsersService _loginUsersService = new();
     private readonly ObservableCollection<string> _libraries = new();
     private AppSettings _settings = new();
 
@@ -42,6 +43,9 @@ public sealed partial class SettingsPage : Page
         UpdateSaveStatus(_libraries.Count == 0
             ? "尚未检测到 Steam 库，请手动添加。"
             : $"已载入 {_libraries.Count} 个库文件夹。");
+
+        if (string.IsNullOrWhiteSpace(SteamIdBox.Text))
+            TryFillSteamIdFromLocal(notify: false);
     }
 
     private void AddLibraryCore(string path)
@@ -119,13 +123,105 @@ public sealed partial class SettingsPage : Page
         if (_libraries.Count == 0)
             foreach (var path in SteamLocator.DetectLibraryPaths(found))
                 AddLibraryCore(path);
+        TryFillSteamIdFromLocal(notify: false);
         ShowInfo("已检测到 Steam", found, InfoBarSeverity.Success);
     }
 
     private async void BrowseInstall_Click(object sender, RoutedEventArgs e)
     {
         var folder = await Services.PickerHelper.PickFolderAsync();
-        if (!string.IsNullOrWhiteSpace(folder)) InstallPathBox.Text = folder;
+        if (string.IsNullOrWhiteSpace(folder)) return;
+        InstallPathBox.Text = folder;
+        TryFillSteamIdFromLocal(notify: false);
+    }
+
+    private async void ReadSteamId_Click(object sender, RoutedEventArgs e)
+    {
+        IReadOnlyList<SteamLoginUser> users;
+        try
+        {
+            users = _loginUsersService.Read(InstallPathBox.Text.Trim());
+        }
+        catch (Exception ex)
+        {
+            ShowInfo("读取失败", $"无法读取本地 Steam 账号：{ex.Message}", InfoBarSeverity.Error);
+            return;
+        }
+
+        if (users.Count == 0)
+        {
+            ShowInfo("未找到本地账号",
+                "请确认 Steam 安装路径正确，并确保本机至少登录过一次 Steam。",
+                InfoBarSeverity.Warning);
+            return;
+        }
+
+        var selected = users.Count == 1 ? users[0] : await PickSteamAccountAsync(users);
+        if (selected == null) return;
+
+        SteamIdBox.Text = selected.SteamId64;
+        UpdateSaveStatus($"已选择账号 {selected.DisplayName}，记得点击“保存设置”。");
+        ShowInfo("已读取 SteamID64",
+            $"{selected.DisplayText}\n点击“保存设置”后生效。",
+            InfoBarSeverity.Success);
+    }
+
+    private bool TryFillSteamIdFromLocal(bool notify)
+    {
+        if (!string.IsNullOrWhiteSpace(SteamIdBox.Text)) return false;
+
+        IReadOnlyList<SteamLoginUser> users;
+        try
+        {
+            users = _loginUsersService.Read(InstallPathBox.Text.Trim());
+        }
+        catch
+        {
+            return false;
+        }
+
+        if (users.Count == 0) return false;
+
+        var selected = users[0];
+        SteamIdBox.Text = selected.SteamId64;
+        UpdateSaveStatus($"已从本地账号填充 SteamID64（{selected.DisplayName}），记得点击“保存设置”。");
+        if (notify)
+            ShowInfo("已读取 SteamID64", selected.DisplayText, InfoBarSeverity.Success);
+        return true;
+    }
+
+    private async Task<SteamLoginUser?> PickSteamAccountAsync(IReadOnlyList<SteamLoginUser> users)
+    {
+        var list = new ListView
+        {
+            ItemsSource = users,
+            SelectedIndex = 0,
+            SelectionMode = ListViewSelectionMode.Single,
+            DisplayMemberPath = nameof(SteamLoginUser.DisplayText),
+            MaxHeight = 360,
+        };
+
+        var panel = new StackPanel { Spacing = 8 };
+        panel.Children.Add(new TextBlock
+        {
+            Text = "检测到多个本地 Steam 账号，请选择要使用的账号：",
+            TextWrapping = TextWrapping.Wrap,
+        });
+        panel.Children.Add(list);
+
+        var dialog = new ContentDialog
+        {
+            Title = "选择 Steam 账号",
+            Content = panel,
+            PrimaryButtonText = "使用此账号",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot,
+        };
+
+        return await dialog.ShowAsync() == ContentDialogResult.Primary
+            ? list.SelectedItem as SteamLoginUser
+            : null;
     }
 
     private void AutoDetectLibraries_Click(object sender, RoutedEventArgs e)

@@ -72,6 +72,82 @@ Check(BuildIdComparer.Compare("111", "222") == -1 && BuildIdComparer.Compare("22
 Check(BuildIdComparer.Compare("", "222") == -1 && BuildIdComparer.Compare("111", "abc") == null,
     "missing current BuildID can be updated and invalid latest is rejected");
 
+// ── Local Steam account discovery ────────────────────────────────────────
+const string loginUsersVdf = """
+"users"
+{
+	// The remembered accounts are keyed by SteamID64.
+	"76561198000000001"
+	{
+		"AccountName"		"alice"
+		"PersonaName"		"Alice"
+		"MostRecent"		"0"
+		"AutoLogin"		"1"
+		"Timestamp"		"100"
+	}
+	"76561198000000002"
+	{
+		"AccountName"		"bob"
+		"PersonaName"		"Bob \"B\""
+		"MostRecent"		"1"
+		"AutoLogin"		"0"
+		"timestamp"		"200"
+	}
+}
+""";
+
+var loginUsers = SteamLoginUsersService.Parse(loginUsersVdf);
+Check(loginUsers.Count == 2 && loginUsers[0].SteamId64 == "76561198000000002"
+    && loginUsers[0].MostRecent,
+    "loginusers parser puts the most recent account first");
+
+var autoLoginOnly = SteamLoginUsersService.Parse("""
+"users"
+{
+	"76561198000000001"
+	{
+		"PersonaName"		"Old"
+		"AutoLogin"		"0"
+		"timestamp"		"100"
+	}
+	"76561198000000002"
+	{
+		"PersonaName"		"Current"
+		"AutoLogin"		"1"
+		"timestamp"		"50"
+	}
+}
+""");
+Check(autoLoginOnly[0].SteamId64 == "76561198000000002",
+    "loginusers parser prefers AutoLogin when MostRecent is absent");
+Check(loginUsers[0].PersonaName == "Bob \"B\"" && loginUsers[0].AccountName == "bob"
+    && loginUsers[0].Timestamp == 200 && loginUsers[1].AutoLogin,
+    "loginusers parser unescapes names and reads AutoLogin plus lowercase timestamps");
+Check(SteamLoginUsersService.Parse("\"users\" { \"123\" { \"MostRecent\" \"1\" } }").Count == 0
+    && SteamLoginUsersService.Parse("not a vdf document").Count == 0,
+    "loginusers parser ignores non-SteamID64 entries and malformed content");
+
+var loginRoot = Path.Combine(Path.GetTempPath(), "sbim-login-" + Guid.NewGuid().ToString("N"));
+try
+{
+    var configDirectory = Path.Combine(loginRoot, "config");
+    Directory.CreateDirectory(configDirectory);
+    await File.WriteAllTextAsync(Path.Combine(configDirectory, "loginusers.vdf"), loginUsersVdf);
+    var fromFile = new SteamLoginUsersService().Read(loginRoot);
+    Check(fromFile.Count == 2 && fromFile[0].SteamId64 == "76561198000000002",
+        "loginusers.vdf is read from the configured Steam install path");
+
+    Directory.Delete(configDirectory, recursive: true);
+    Directory.CreateDirectory(Path.Combine(loginRoot, "userdata", "12345"));
+    var fromUserData = new SteamLoginUsersService().Read(loginRoot);
+    Check(fromUserData.Count == 1 && fromUserData[0].SteamId64 == "76561197960278073",
+        "userdata folder names are converted to SteamID64 when loginusers.vdf is missing");
+}
+finally
+{
+    try { if (Directory.Exists(loginRoot)) Directory.Delete(loginRoot, recursive: true); } catch { }
+}
+
 const string json = """
 {
   "status":"success", "data":{"123":{

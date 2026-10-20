@@ -39,10 +39,19 @@
                                 Click="BrowseInstall_Click"/>
                     </Grid>
 
-                    <TextBox x:Name="SteamIdBox" Header="SteamID64"
-                             PlaceholderText="例如 76561198000000000"
-                             ToolTipService.ToolTip="写入 ACF 的 LastOwner。仅新建配置时需要；只更新 BuildID 时可以不填。"/>
-                    <TextBlock Text="SteamID64 可在 Steam 个人资料页或 steamid.io 查询。只更新 BuildID 时不需要填写。"
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="SteamIdBox" Header="SteamID64"
+                                 PlaceholderText="例如 76561198000000000"
+                                 ToolTipService.ToolTip="写入 ACF 的 LastOwner。仅新建配置时需要；只更新 BuildID 时可以不填。"/>
+                        <Button Grid.Column="1" Content="读取本地账号" VerticalAlignment="Bottom"
+                                Click="ReadSteamId_Click"
+                                ToolTipService.ToolTip="从 Steam 安装目录下的 config/loginusers.vdf 读取最近登录的账号"/>
+                    </Grid>
+                    <TextBlock Text="SteamID64 可在 Steam 个人资料页或 steamid.io 查询；也可以点击“读取本地账号”自动填充。只更新 BuildID 时不需要填写。"
                                FontSize="12" TextWrapping="Wrap"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                 </StackPanel>

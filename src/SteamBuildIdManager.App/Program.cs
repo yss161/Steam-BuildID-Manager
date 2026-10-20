@@ -25,6 +25,15 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        // Elevate before taking the single-instance lock so the elevated copy owns it.
+        if (ShouldElevate(args))
+        {
+            if (ElevationService.TryRestartElevated(string.Join(' ', args)))
+            {
+                return;
+            }
+        }
+
         _singleInstanceMutex = new Mutex(true, @"Local\SteamBuildIDManager_SingleInstance", out var isFirstInstance);
         if (!isFirstInstance)
         {
@@ -78,6 +87,28 @@ internal static class Program
 #endif
         }
     }
+
+    /// <summary>
+    /// The "以管理员身份启动" setting is honoured on every launch. The "{noelevate}" argument
+    /// suppresses it so a deliberately de-elevated start stays possible.
+    /// </summary>
+    private static bool ShouldElevate(string[] args)
+    {
+        if (args.Any(argument => string.Equals(argument, NoElevateArgument, StringComparison.OrdinalIgnoreCase)))
+            return false;
+        if (ElevationService.IsElevated()) return false;
+
+        try
+        {
+            return new SettingsService().Load().RunAsAdministrator;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private const string NoElevateArgument = "--no-elevate";
 
     internal static void WriteCrashLog(string source, Exception? exception)
     {

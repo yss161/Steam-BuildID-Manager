@@ -440,6 +440,85 @@ Check(await cachedProvider.GetLatestBuildIdAsync("123") == "888"
 Check(await cachedProvider.GetLatestBuildIdAsync("123", forceRefresh: true) == "888",
     "BuildID provider supports forced refresh");
 
+// ── Theme / appearance / elevation settings ──────────────────────────────
+var appearanceSettingsPath = Path.Combine(Path.GetTempPath(), "sbim-appearance-" + Guid.NewGuid().ToString("N"), "settings.json");
+try
+{
+    var appearanceService = new SettingsService(appearanceSettingsPath);
+    Check(appearanceService.Load().NormalizedThemeMode == ThemeModes.System,
+        "default theme mode follows the system");
+    Check(appearanceService.Save(new AppSettings
+    {
+        ThemeMode = "DARK",
+        BackgroundImagePath = @"C:\Pictures\bg.png",
+        BackgroundImageOpacity = 0.55,
+        RunAsAdministrator = true,
+    }), "appearance settings save succeeds");
+
+    var appearanceLoaded = appearanceService.Load();
+    Check(appearanceLoaded.NormalizedThemeMode == ThemeModes.Dark,
+        "theme mode is normalised to lower case");
+    Check(Math.Abs(appearanceLoaded.NormalizedBackgroundOpacity - 0.55) < 0.0001
+        && appearanceLoaded.BackgroundImagePath.EndsWith("bg.png", StringComparison.OrdinalIgnoreCase)
+        && appearanceLoaded.RunAsAdministrator,
+        "appearance settings round-trip preserves image, opacity and elevation");
+
+    Check(new AppSettings { ThemeMode = "purple" }.NormalizedThemeMode == ThemeModes.System,
+        "unknown theme mode falls back to the system theme");
+    Check(new AppSettings { BackgroundImageOpacity = 5 }.NormalizedBackgroundOpacity == 1
+        && new AppSettings { BackgroundImageOpacity = 0 }.NormalizedBackgroundOpacity == 0.1
+        && new AppSettings { BackgroundImageOpacity = double.NaN }.NormalizedBackgroundOpacity == 0.35,
+        "background opacity is clamped to the supported range");
+    Check(ThemeModes.DisplayName("light") == "浅色" && ThemeModes.DisplayName("dark") == "深色"
+        && ThemeModes.DisplayName(null) == "跟随系统",
+        "theme mode display names are localised");
+    Check(appearanceService.Update(settings => settings.ThemeMode = ThemeModes.Light)
+        && appearanceService.Load().NormalizedThemeMode == ThemeModes.Light,
+        "appearance settings update preserves other fields");
+}
+finally
+{
+    try { Directory.Delete(Path.GetDirectoryName(appearanceSettingsPath)!, recursive: true); } catch { }
+}
+
+// ── Game summary lookup ──────────────────────────────────────────────────
+var summary = SteamGameLookupService.Summarize("123", selection);
+Check(summary.AppId == "123" && summary.DisplayName == "示例游戏"
+    && summary.InstallDirectory == "Example Game" && summary.BuildId == "12345",
+    "game summary exposes name, install directory and BuildID");
+Check(summary.HasPrimaryDepot && summary.PrimaryDepotId == "124"
+    && summary.PrimaryManifest == "18446744073709551615",
+    "game summary reports the first compatible depot as the primary one");
+Check(summary.Depots.Count == 1 && summary.AdditionalDepots.Count == 0,
+    "single-depot summaries have no additional depots");
+
+var multiSummary = SteamGameLookupService.Summarize("123", selection with
+{
+    Depots = selection.Depots.Concat(new[]
+    {
+        new SteamDepotCandidate(new SteamDepotInfo("129", "Extra", commonFilter, "",
+            new Dictionary<string, string> { ["public"] = "666" }), "666"),
+    }).ToList(),
+});
+Check(multiSummary.Depots.Count == 2 && multiSummary.PrimaryDepotId == "124"
+    && multiSummary.AdditionalDepots.Count == 1 && multiSummary.AdditionalDepots[0].Depot.Id == "129",
+    "additional depots keep the first compatible depot primary");
+
+var missingSummary = SteamGameLookupService.Summarize("123", selection with
+{
+    Depots = Array.Empty<SteamDepotCandidate>(),
+    BuildId = "",
+});
+Check(!missingSummary.HasPrimaryDepot && missingSummary.PrimaryDepotId == ""
+    && missingSummary.DepotSummary == "没有可用 Depot",
+    "missing metadata yields an explicit empty primary depot");
+Check(missingSummary.Warnings.Any(w => w.Contains("BuildID", StringComparison.Ordinal)),
+    "missing BuildID is surfaced as a warning");
+
+var lookupService = new SteamGameLookupService(new StubAppInfoService("888"));
+var stubSummary = await lookupService.LookupAsync("123");
+Check(stubSummary.BuildId == "888", "lookup service reads the public branch through the stub transport");
+
 if (args.Contains("--live"))
 {
     var live = await new SteamAppInfoService().GetAppInfoAsync("4162040");

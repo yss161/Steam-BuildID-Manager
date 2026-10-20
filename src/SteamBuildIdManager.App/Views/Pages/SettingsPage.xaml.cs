@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using SteamBuildIdManager.Core.Models;
 using SteamBuildIdManager.Core.Services;
 
@@ -12,6 +13,7 @@ public sealed partial class SettingsPage : Page
     private readonly SteamLoginUsersService _loginUsersService = new();
     private readonly ObservableCollection<string> _libraries = new();
     private AppSettings _settings = new();
+    private bool _suppressAppearanceEvents;
 
     public SettingsPage()
     {
@@ -40,12 +42,158 @@ public sealed partial class SettingsPage : Page
                 AddLibraryCore(path);
         }
 
+        LoadAppearance();
+
         UpdateSaveStatus(_libraries.Count == 0
             ? "尚未检测到 Steam 库，请手动添加。"
             : $"已载入 {_libraries.Count} 个库文件夹。");
 
         if (string.IsNullOrWhiteSpace(SteamIdBox.Text))
             TryFillSteamIdFromLocal(notify: false);
+    }
+
+    private void LoadAppearance()
+    {
+        _suppressAppearanceEvents = true;
+        try
+        {
+            var mode = ThemeModes.Normalize(_settings.ThemeMode);
+            ThemeCombo.SelectedIndex = mode switch
+            {
+                ThemeModes.Light => 1,
+                ThemeModes.Dark => 2,
+                _ => 0,
+            };
+
+            BackgroundPathText.Text = string.IsNullOrWhiteSpace(_settings.BackgroundImagePath)
+                ? "未设置"
+                : _settings.BackgroundImagePath;
+            ClearBackgroundButton.IsEnabled = !string.IsNullOrWhiteSpace(_settings.BackgroundImagePath);
+
+            var opacity = (int)Math.Round(_settings.NormalizedBackgroundOpacity * 100);
+            BackgroundOpacitySlider.Value = opacity;
+            UpdateOpacityText(opacity);
+
+            RunAsAdminToggle.IsOn = _settings.RunAsAdministrator;
+            RefreshElevationStatus();
+        }
+        finally
+        {
+            _suppressAppearanceEvents = false;
+        }
+    }
+
+    private void RefreshElevationStatus()
+    {
+        var elevated = ElevationService.IsElevated();
+        ElevationStatusText.Text = elevated ? "当前进程已提权。" : "当前进程为标准权限。";
+        RestartElevatedButton.IsEnabled = !elevated;
+        RestartElevatedButton.Visibility = elevated ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void ThemeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressAppearanceEvents) return;
+        var mode = SelectedThemeMode();
+        _settingsService.Update(settings => settings.ThemeMode = mode);
+        _settings.ThemeMode = mode;
+        ApplyAppearanceToWindow(notify: true);
+        UpdateSaveStatus($"主题已切换为“{ThemeModes.DisplayName(mode)}”。");
+    }
+
+    private string SelectedThemeMode() =>
+        (ThemeCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? ThemeModes.System;
+
+    private async void PickBackground_Click(object sender, RoutedEventArgs e)
+    {
+        var path = await Services.PickerHelper.PickImageAsync();
+        if (string.IsNullOrWhiteSpace(path)) return;
+
+        _settingsService.Update(settings => settings.BackgroundImagePath = path);
+        _settings.BackgroundImagePath = path;
+        BackgroundPathText.Text = path;
+        ClearBackgroundButton.IsEnabled = true;
+        ApplyAppearanceToWindow(notify: true);
+        UpdateSaveStatus("背景图片已更新。");
+    }
+
+    private void ClearBackground_Click(object sender, RoutedEventArgs e)
+    {
+        _settingsService.Update(settings => settings.BackgroundImagePath = "");
+        _settings.BackgroundImagePath = "";
+        BackgroundPathText.Text = "未设置";
+        ClearBackgroundButton.IsEnabled = false;
+        ApplyAppearanceToWindow(notify: false);
+        UpdateSaveStatus("已清除背景图片。");
+    }
+
+    private void BackgroundOpacity_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        var percent = (int)Math.Round(e.NewValue);
+        UpdateOpacityText(percent);
+        if (_suppressAppearanceEvents) return;
+
+        var opacity = Math.Clamp(percent / 100d, 0.1, 1);
+        _settingsService.Update(settings => settings.BackgroundImageOpacity = opacity);
+        _settings.BackgroundImageOpacity = opacity;
+        ApplyAppearanceToWindow(notify: false);
+    }
+
+    private void UpdateOpacityText(int percent) => OpacityHeaderText.Text = $"背景不透明度：{percent}%";
+
+    private void ApplyAppearanceToWindow(bool notify)
+    {
+        if (App.MainWindow is MainWindow window) window.ApplyAppearance(_settings, notify);
+    }
+
+    private async void RunAsAdmin_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_suppressAppearanceEvents) return;
+        var enabled = RunAsAdminToggle.IsOn;
+        _settingsService.Update(settings => settings.RunAsAdministrator = enabled);
+        _settings.RunAsAdministrator = enabled;
+
+        if (!enabled)
+        {
+            UpdateSaveStatus("已关闭自动提权启动，下次启动不再请求管理员权限。");
+            return;
+        }
+
+        if (ElevationService.IsElevated())
+        {
+            UpdateSaveStatus("已开启管理员启动（当前进程已经是管理员）。");
+            return;
+        }
+
+        UpdateSaveStatus("已开启管理员启动，下次启动会请求管理员权限。");
+        var dialog = new ContentDialog
+        {
+            Title = "立即以管理员重启？",
+            Content = new TextBlock
+            {
+                Text = "已保存“以管理员身份启动”。要现在重启应用并请求管理员权限吗？",
+                TextWrapping = TextWrapping.Wrap,
+            },
+            PrimaryButtonText = "立即重启",
+            CloseButtonText = "稍后",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot,
+        };
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary) RestartElevated();
+    }
+
+    private void RestartElevated_Click(object sender, RoutedEventArgs e) => RestartElevated();
+
+    private void RestartElevated()
+    {
+        if (!ElevationService.TryRestartElevated())
+        {
+            ShowInfo("提权失败", "未能以管理员身份重启，可能取消了 UAC 提示。当前仍以标准权限运行。",
+                InfoBarSeverity.Warning);
+            return;
+        }
+
+        Application.Current.Exit();
     }
 
     private void AddLibraryCore(string path)

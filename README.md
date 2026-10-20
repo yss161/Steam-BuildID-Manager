@@ -17,7 +17,10 @@
 5. **新建 / 重建配置**：填写 AppID 后自动获取名称、安装目录、BuildID、Depot 和启动 EXE 候选，创建空占位 EXE 并写入 ACF，同时生成可粘贴到 Steam 启动选项的命令。
 6. **Steam 路径探测**：读取注册表和 `libraryfolders.vdf`，自动发现 Steam 安装目录和所有库文件夹，也支持手动添加。
 7. **本地账号读取**：从 `config\loginusers.vdf` 读取本机登录过的账号，按 `MostRecent` / `AutoLogin` / 时间排序，自动填充当前账号的 SteamID64；多账号时可弹窗选择，文件缺失时从 `userdata` 的 SteamID32 换算。
-8. **安全保护**：默认只列出 `SizeOnDisk = 0` 的占位配置；Steam 正在运行时给出警告；检测到 ACF 已被其他程序修改时拒绝覆盖。
+8. **外观设置**：主题支持跟随系统 / 浅色 / 深色；可选择本地图片作为窗口背景，并调整 10%–100% 不透明度。
+9. **管理员启动**：设置页可开启“以管理员身份启动”，每次启动自动请求 UAC 提权，也可一键以管理员重启。
+10. **获取游戏信息**：输入 AppID 即可查看显示名称、安装目录名、BuildID、主 DepotID、主 Manifest、启动 EXE 和全部 Depot，并可复制启动命令。
+11. **安全保护**：默认只列出 `SizeOnDisk = 0` 的占位配置；Steam 正在运行时给出警告；检测到 ACF 已被其他程序修改时拒绝覆盖。
 
 ## 界面与使用流程
 
@@ -26,6 +29,7 @@
 3. 状态为“发现更新”的配置可以直接点「更新」，或点「一键更新全部」。
 4. 更新完成后按提示完全重启 Steam，让它重新读取 ACF。
 5. 新建配置时点击「新建配置」，填写 AppID，点「获取 Steam 信息」，核对后保存。生成的启动命令会自动复制到剪贴板，请粘贴到 Steam 库 → 游戏属性 → 启动选项。
+6. 只想查看某个 AppID 的元数据时，点「获取游戏信息」，输入 AppID 后点「获取信息」；这里只读展示，不会修改任何文件。
 
 > 更新 BuildID 前建议先完全退出 Steam。Steam 运行时可能把内存中的旧配置写回 ACF，导致更新被覆盖。
 
@@ -50,25 +54,26 @@ BuildIdUpdateService ──► api.steamcmd.net/v1/info/<AppID> ──► public
 
 仓库自带 [GitHub Actions 工作流](.github/workflows/build.yml)：
 
-1. 每次推送或提交 Pull Request 时，自动运行 79 项核心回归测试。
+1. 每次推送或提交 Pull Request 时，自动运行 94 项核心回归测试。
 2. 测试通过后，在 `windows-latest` 上以 `win-x64` 自包含方式发布 WinUI 3 应用。
-3. 用 Inno Setup 生成按用户安装的安装包，并在 CI 中执行静默安装、启动文件检查和静默卸载冒烟测试。
-4. 便携版 `Steam-BuildID-Manager-win-x64.zip` 和安装版 `Steam-BuildID-Manager-Setup-1.1.0.exe` 都会上传到 Actions Artifacts。
+3. 用 Inno Setup 生成需要管理员权限的全机安装包，并在 CI 中执行静默安装、启动文件检查和静默卸载冒烟测试。
+4. 便携版 `Steam-BuildID-Manager-win-x64.zip` 和安装版 `Steam-BuildID-Manager-Setup-1.2.0.exe` 都会上传到 Actions Artifacts。
 5. 推送 `v*` 标签时，两个产物会自动附加到 GitHub Release。
 
 下载方式：
 
-1. **安装版**：从 [Releases](https://github.com/yss161/Steam-BuildID-Manager/releases) 下载 `Steam-BuildID-Manager-Setup-1.1.0.exe`。
+1. **安装版**：从 [Releases](https://github.com/yss161/Steam-BuildID-Manager/releases) 下载 `Steam-BuildID-Manager-Setup-1.2.0.exe`。
 2. **便携版**：从 Releases 下载 `Steam-BuildID-Manager-win-x64.zip`，解压后直接运行。
 3. **最新构建**：打开 [Actions](https://github.com/yss161/Steam-BuildID-Manager/actions/workflows/build.yml)，选择最近一次成功的 `build`，在页面底部下载安装版或便携版。
 
 ## 安装版
 
-1. 双击 `Steam-BuildID-Manager-Setup-1.1.0.exe`，按向导完成安装，不需要管理员权限。
-2. 默认安装到 `%LocalAppData%\Programs\SteamBuildIDManager`，并创建开始菜单快捷方式；桌面快捷方式默认不勾选。
+1. 双击 `Steam-BuildID-Manager-Setup-1.2.0.exe`，安装程序会自动请求管理员权限，在 UAC 提示中选择“是”即可。
+2. 默认安装到 `C:\Program Files\SteamBuildIDManager`；开始菜单快捷方式对所有用户可见，桌面快捷方式默认不勾选。
 3. 安装程序会检测并关闭正在运行的旧版本，安装完成后可直接启动。
-4. 卸载入口在 Windows“设置 → 应用 → 已安装的应用”，不会删除用户设置和 ACF 备份。
+4. 卸载需要管理员权限，入口在 Windows“设置 → 应用 → 已安装的应用”，不会删除用户设置和 ACF 备份。
 5. 安装包界面支持简体中文和英文，按系统语言自动选择。
+6. 不想提权时仍可使用便携版 zip，解压后直接运行，不写注册表。
 
 ## 本地构建
 
@@ -104,7 +109,7 @@ installer/                      Inno Setup 安装包脚本与简体中文语言�
 .github/workflows/build.yml     GitHub Actions 云编译（测试、便携版、安装版、Release）
 ```
 
-核心测试覆盖：ACF 解析与字段保留、BuildID 数值比较、缺失 BuildID 插入、备份保留策略、扫描与批量更新、陈旧扫描拒绝、Steam 信息解析、Steam 本地账号 VDF 解析、SteamID32 换算、库路径解析、配置生成、设置读写和 HTTP 取消。
+核心测试覆盖：ACF 解析与字段保留、BuildID 数值比较、缺失 BuildID 插入、备份保留策略、扫描与批量更新、陈旧扫描拒绝、Steam 信息解析、Steam 本地账号 VDF 解析、SteamID32 换算、主题规范化、背景不透明度范围、主 Depot 选取、库路径解析、配置生成、设置读写和 HTTP 取消。
 
 ## 常见问题
 
@@ -119,6 +124,15 @@ A：本工具只写 `appmanifest_*.acf`，并只在占位文件不存在时创�
 
 **Q：默认列表里为什么没有我的游戏？**
 A：默认只显示 `SizeOnDisk = 0` 的占位配置。打开“显示全部 Steam 游戏”可以查看所有 ACF，但对真实安装的游戏请谨慎操作。
+
+**Q：为什么安装包一定要管理员权限？**
+A：默认安装到 `C:\Program Files` 并写入所有用户的开始菜单，安装和卸载都需要管理员权限。不想提权可直接使用便携版 zip。
+
+**Q：开启“以管理员身份启动”后没反应？**
+A：启动时会弹出 UAC 提示，取消后应用会以标准权限继续运行，不会崩溃。也可以随时在设置页点“立即以管理员重启”。
+
+**Q：背景图片会被复制吗？**
+A：不会。程序只记录图片的绝对路径并直接读取；图片被移动或删除后会自动隐藏背景层，界面照常使用。
 
 ## 免责声明
 

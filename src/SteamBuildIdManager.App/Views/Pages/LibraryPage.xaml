@@ -42,6 +42,8 @@
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
@@ -50,13 +52,15 @@
                     Style="{StaticResource AccentButtonStyle}" Click="Check_Click"/>
             <Button x:Name="UpdateAllButton" Grid.Column="2" Content="一键更新全部" Click="UpdateAll_Click"/>
             <Button x:Name="AddButton" Grid.Column="3" Content="新建配置" Click="Add_Click"/>
-            <Button x:Name="SettingsButton" Grid.Column="4" Content="设置" Click="Settings_Click"/>
-            <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <Button x:Name="InfoButton" Grid.Column="4" Content="获取游戏信息" Click="GameInfo_Click"
+                    ToolTipService.ToolTip="按 AppID 读取显示名称、安装目录名、BuildID、主 DepotID 和主 Manifest"/>
+            <Button x:Name="SettingsButton" Grid.Column="5" Content="设置" Click="Settings_Click"/>
+            <StackPanel Grid.Column="6" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                 <ProgressRing x:Name="BusyRing" Width="18" Height="18" IsActive="False"/>
                 <TextBlock x:Name="BusyText" FontSize="12" VerticalAlignment="Center"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
             </StackPanel>
-            <TextBlock x:Name="SummaryText" Grid.Column="6" HorizontalAlignment="Right"
+            <TextBlock x:Name="SummaryText" Grid.Column="7" HorizontalAlignment="Right"
                        VerticalAlignment="Center" FontSize="13"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
         </Grid>

@@ -110,6 +110,91 @@
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1" CornerRadius="8" Padding="18">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="外观" FontSize="16" FontWeight="SemiBold"/>
+
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="主题" FontSize="14"/>
+                            <TextBlock Text="跟随系统时由 Windows 的浅色/深色设置决定。"
+                                       FontSize="12" TextWrapping="Wrap"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+                        <ComboBox x:Name="ThemeCombo" Grid.Column="1" MinWidth="150" VerticalAlignment="Center"
+                                  SelectionChanged="ThemeCombo_SelectionChanged">
+                            <ComboBoxItem Content="跟随系统" Tag="system"/>
+                            <ComboBoxItem Content="浅色" Tag="light"/>
+                            <ComboBoxItem Content="深色" Tag="dark"/>
+                        </ComboBox>
+                    </Grid>
+
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="背景图片" FontSize="14"/>
+                            <TextBlock x:Name="BackgroundPathText" Text="未设置"
+                                       FontSize="12" TextWrapping="Wrap"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+                        <Button Grid.Column="1" Content="选择图片" VerticalAlignment="Center"
+                                Click="PickBackground_Click"/>
+                        <Button x:Name="ClearBackgroundButton" Grid.Column="2" Content="清除"
+                                VerticalAlignment="Center" Click="ClearBackground_Click"/>
+                    </Grid>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock x:Name="OpacityHeaderText" Text="背景不透明度" FontSize="14"/>
+                        <Slider x:Name="BackgroundOpacitySlider" Minimum="10" Maximum="100"
+                                StepFrequency="5" TickFrequency="10"
+                                ValueChanged="BackgroundOpacity_ValueChanged"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="18">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="启动方式" FontSize="16" FontWeight="SemiBold"/>
+
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="以管理员身份启动" FontSize="14"/>
+                            <TextBlock Text="开启后启动时会请求 UAC 提权，便于写入受保护目录中的 ACF。"
+                                       FontSize="12" TextWrapping="Wrap"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+                        <ToggleSwitch x:Name="RunAsAdminToggle" Grid.Column="1" VerticalAlignment="Center"
+                                      OnContent="已开启" OffContent="已关闭"
+                                      Toggled="RunAsAdmin_Toggled"/>
+                    </Grid>
+
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE7EF;" FontSize="14"
+                                  Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock x:Name="ElevationStatusText" FontSize="12" VerticalAlignment="Center"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <Button x:Name="RestartElevatedButton" Content="立即以管理员重启"
+                                Click="RestartElevated_Click"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="18">
                 <StackPanel Spacing="10">
                     <TextBlock Text="关于" FontSize="16" FontWeight="SemiBold"/>
                     <TextBlock x:Name="AboutVersionText" FontSize="13"/>

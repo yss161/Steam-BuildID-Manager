@@ -3,7 +3,7 @@
 ; The publish folder must exist first (see README).
 
 #define MyAppName "Steam BuildID 管理器"
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "1.2.0"
 #define MyAppPublisher "yss161"
 #define MyAppURL "https://github.com/yss161/Steam-BuildID-Manager"
 #define MyAppExeName "SteamBuildIDManager.exe"
@@ -18,10 +18,11 @@ AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}/issues
 AppUpdatesURL={#MyAppURL}/releases
 AppCopyright=Copyright (C) 2026 Violet0923, yss161
-DefaultDirName={localappdata}\Programs\SteamBuildIDManager
+DefaultDirName={autopf}\SteamBuildIDManager
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
-PrivilegesRequired=lowest
+; Always request administrator rights; the app is installed for all users.
+PrivilegesRequired=admin
 OutputDir=..\artifacts\installer
 OutputBaseFilename=Steam-BuildID-Manager-Setup-{#MyAppVersion}
 SetupIconFile=..\src\SteamBuildIdManager.App\Assets\app.ico
@@ -36,7 +37,7 @@ CloseApplications=yes
 CloseApplicationsFilter=SteamBuildIDManager.exe
 RestartApplications=no
 LicenseFile=..\LICENSE
-VersionInfoVersion=1.1.0.0
+VersionInfoVersion=1.2.0.0
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription={#MyAppName} 安装程序
 VersionInfoProductName={#MyAppName}
@@ -53,9 +54,9 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "..\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
-Name: "{userdesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+Name: "{autoprograms}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "启动 {#MyAppName}"; Flags: nowait postinstall skipifsilent

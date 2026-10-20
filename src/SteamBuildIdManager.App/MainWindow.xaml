@@ -8,32 +8,47 @@
     mc:Ignorable="d"
     Title="Steam BuildID 管理器">
 
-    <NavigationView x:Name="NavView"
-                    IsBackButtonVisible="Collapsed"
-                    IsSettingsVisible="False"
-                    PaneDisplayMode="Left"
-                    OpenPaneLength="230"
-                    SelectionChanged="NavView_SelectionChanged">
-        <NavigationView.MenuItems>
-            <NavigationViewItem x:Name="LibraryNavItem" Content="BuildID 管理" Tag="Library">
-                <NavigationViewItem.Icon>
-                    <FontIcon Glyph="&#xE8F1;"/>
-                </NavigationViewItem.Icon>
-            </NavigationViewItem>
-            <NavigationViewItem x:Name="SettingsNavItem" Content="设置" Tag="Settings">
-                <NavigationViewItem.Icon>
-                    <FontIcon Glyph="&#xE713;"/>
-                </NavigationViewItem.Icon>
-            </NavigationViewItem>
-        </NavigationView.MenuItems>
+    <Grid x:Name="RootGrid">
+        <!-- Background image sits above the system backdrop but below the navigation content. -->
+        <Image x:Name="BackgroundImage"
+               Stretch="UniformToFill"
+               Opacity="0"
+               Visibility="Collapsed"
+               IsHitTestVisible="False"/>
+        <!-- Scrim keeps text readable over bright photographs. -->
+        <Border x:Name="BackgroundScrim"
+                Background="Transparent"
+                IsHitTestVisible="False"
+                Visibility="Collapsed"/>
 
-        <NavigationView.PaneFooter>
-            <TextBlock x:Name="VersionText"
-                       Margin="16,8,16,16"
-                       FontSize="12"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-        </NavigationView.PaneFooter>
+        <NavigationView x:Name="NavView"
+                        IsBackButtonVisible="Collapsed"
+                        IsSettingsVisible="False"
+                        PaneDisplayMode="Left"
+                        OpenPaneLength="230"
+                        SelectionChanged="NavView_SelectionChanged"
+                        Background="Transparent">
+            <NavigationView.MenuItems>
+                <NavigationViewItem x:Name="LibraryNavItem" Content="BuildID 管理" Tag="Library">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE8F1;"/>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem x:Name="SettingsNavItem" Content="设置" Tag="Settings">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE713;"/>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+            </NavigationView.MenuItems>
 
-        <Frame x:Name="ContentFrame"/>
-    </NavigationView>
+            <NavigationView.PaneFooter>
+                <TextBlock x:Name="VersionText"
+                           Margin="16,8,16,16"
+                           FontSize="12"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+            </NavigationView.PaneFooter>
+
+            <Frame x:Name="ContentFrame" Background="Transparent"/>
+        </NavigationView>
+    </Grid>
 </Window>

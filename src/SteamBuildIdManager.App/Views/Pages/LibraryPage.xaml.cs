@@ -372,6 +372,12 @@ public sealed partial class LibraryPage : Page
 
     private void Settings_Click(object sender, RoutedEventArgs e) => OpenSettings();
 
+    private async void GameInfo_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new GameInfoDialog { XamlRoot = XamlRoot };
+        await dialog.ShowAsync();
+    }
+
     private async void ShowAll_Toggled(object sender, RoutedEventArgs e)
     {
         if (_suppressToggle) return;

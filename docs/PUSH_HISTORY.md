@@ -5,8 +5,8 @@
 1. 推送人员：圆鲨鲨
 2. 目标分支：main
 3. 实现内容：版本升级到 1.1.0；新增本地 Steam 账号读取，解析 `config\loginusers.vdf` 并按 `MostRecent`、`AutoLogin`、登录时间排序；设置页支持自动填充和“读取本地账号”多账号选择；`loginusers.vdf` 缺失时从 `userdata` 的 SteamID32 换算；补充账号解析、大小写时间戳和 userdata 回退测试。
-4. 验证结果：79 项核心回归测试通过；本机实际 `loginusers.vdf` 读取到 6 个账号并自动填充最近登录账号；UI Automation 验证多账号弹窗、默认排序和选择其他账号后 SteamID64 正确更新；1.1.0 自包含发布与 Inno Setup 安装包编译成功。
-5. 发布计划：推送后由 GitHub Actions 运行测试、便携版、安装包静默安装/卸载冒烟测试，并创建 `v1.1.0` Release。
+4. 验证结果：79 项核心回归测试通过；本机实际 `loginusers.vdf` 读取到 6 个账号并自动填充最近登录账号；UI Automation 验证多账号弹窗、默认排序和选择其他账号后 SteamID64 正确更新；1.1.0 自包含发布与 Inno Setup 安装包编译成功；GitHub Actions 运行 [39363595234](https://github.com/yss161/Steam-BuildID-Manager/actions/runs/39363595234) 的 Core tests、Build portable、Build installer 全部成功，安装包完成静默安装/卸载冒烟测试。
+5. 发布结果：创建 `v1.1.0` 标签，Release 同时附加便携版 zip 与安装版 exe。
 
 ## 2026-10-20 10:40:00 +08:00
 

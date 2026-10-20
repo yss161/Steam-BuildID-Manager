@@ -1,0 +1,40 @@
+# Build output
+bin/
+obj/
+publish/
+Output/
+x64/
+x86/
+ARM64/
+*.appx
+*.msix
+*.msixbundle
+*.appxupload
+
+# Local toolchain and temp files
+.dotnet/
+.dotnet-home/
+.tmp/
+.nuget-cache/
+artifacts/
+TestResults/
+
+# IDE / user settings
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.DotSettings.user
+
+# Logs, crash dumps and generated ACF backups
+*.log
+*.dmp
+*.acf
+backups/
+
+# OS junk
+Thumbs.db
+Desktop.ini
+.DS_Store

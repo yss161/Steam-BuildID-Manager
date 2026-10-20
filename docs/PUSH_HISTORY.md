@@ -5,8 +5,8 @@
 1. 推送人员：圆鲨鲨
 2. 目标分支：main
 3. 实现内容：版本升级到 1.0.1；新增 Inno Setup 安装版、简体中文安装界面、按用户安装、开始菜单与可选桌面快捷方式、安装前关闭旧版本；新增 GitHub Actions 安装包构建、静默安装/卸载冒烟测试和双产物 Release。
-4. 验证结果：73 项核心回归测试通过；自包含 1.0.1 发布成功；本地 ISCC 编译安装包成功（约 60.6 MB），安装包可正常启动；本机沙箱对开始菜单与 HKCU 卸载项的 ACL 限制导致静默安装无法在本机完整完成，改由 GitHub Actions runner 执行安装/卸载冒烟测试。
-5. 发布计划：推送后创建 `v1.0.1` 标签，Release 同时附加便携版 zip 与安装版 exe。
+4. 验证结果：73 项核心回归测试通过；自包含 1.0.1 发布成功；本地 ISCC 编译安装包成功（约 60.6 MB）；GitHub Actions 运行 [39360218903](https://github.com/yss161/Steam-BuildID-Manager/actions/runs/39360218903) 的 Core tests、Build portable win-x64 package、Build installer 全部成功，安装包在 CI 中完成静默安装、EXE/PRI 检查和静默卸载；本机沙箱对开始菜单与 HKCU 卸载项的 ACL 限制不影响真实用户安装。
+5. 发布结果：创建 `v1.0.1` 标签，Release 同时附加便携版 zip 与安装版 exe。
 
 ## 2026-10-20 09:21:37 +08:00
 

@@ -23,6 +23,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Spacing="4">
@@ -82,7 +83,6 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
-
                 <Grid Padding="16,10" ColumnSpacing="12"
                       Background="{ThemeResource LayerFillColorAltBrush}">
                     <Grid.ColumnDefinitions>
@@ -171,6 +171,41 @@
                     </StackPanel>
                 </StackPanel>
             </Grid>
+        </Border>
+
+        <Border Grid.Row="5"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1" CornerRadius="8" Padding="14">
+            <StackPanel Spacing="8">
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="运行日志" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="LogHintText" Grid.Column="1" FontSize="11"
+                               VerticalAlignment="Center"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
+                        <Button Content="清空" Click="ClearLog_Click" FontSize="12" Padding="10,3"/>
+                        <Button Content="打开日志文件" Click="OpenLogFolder_Click" FontSize="12" Padding="10,3"/>
+                    </StackPanel>
+                </Grid>
+
+                <Border BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1" CornerRadius="6"
+                        Background="{ThemeResource LayerFillColorAltBrush}">
+                    <ScrollViewer x:Name="LogScroll" Height="130" Padding="10,6"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <TextBlock x:Name="LogText" FontFamily="Consolas" FontSize="12"
+                                   TextWrapping="Wrap" IsTextSelectionEnabled="True"
+                                   Text="暂无日志。"/>
+                    </ScrollViewer>
+                </Border>
+            </StackPanel>
         </Border>
     </Grid>
 </Page>

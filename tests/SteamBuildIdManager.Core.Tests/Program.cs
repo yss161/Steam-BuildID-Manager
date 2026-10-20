@@ -491,6 +491,8 @@ Check(summary.HasPrimaryDepot && summary.PrimaryDepotId == "124"
     "game summary reports the first compatible depot as the primary one");
 Check(summary.Depots.Count == 1 && summary.AdditionalDepots.Count == 0,
     "single-depot summaries have no additional depots");
+Check(summary.PlaceholderExeName == "Launcher.exe",
+    "game summary exposes the inferred placeholder EXE name");
 
 var multiSummary = SteamGameLookupService.Summarize("123", selection with
 {
@@ -518,6 +520,40 @@ Check(missingSummary.Warnings.Any(w => w.Contains("BuildID", StringComparison.Or
 var lookupService = new SteamGameLookupService(new StubAppInfoService("888"));
 var stubSummary = await lookupService.LookupAsync("123");
 Check(stubSummary.BuildId == "888", "lookup service reads the public branch through the stub transport");
+
+// ── Placeholder EXE inference ────────────────────────────────────────────
+Check(SteamPlaceholderName.FromExecutables(selection.Executables) == "Launcher.exe",
+    "placeholder name comes from the single launch executable");
+Check(SteamPlaceholderName.FromExecutables(Array.Empty<SteamExecutableCandidate>()) == "",
+    "placeholder name is empty when no launch option exists");
+
+var nestedFirst = new[]
+{
+    new SteamExecutableCandidate(@"Bin\Launcher.exe", Array.Empty<SteamLaunchInfo>()),
+    new SteamExecutableCandidate("Game.exe", Array.Empty<SteamLaunchInfo>()),
+};
+Check(SteamPlaceholderName.FromExecutables(nestedFirst) == "Game.exe",
+    "placeholder name prefers the shallowest executable when several exist");
+
+Check(SteamPlaceholderName.FromInstallDirectory("Example Game") == "Example Game.exe"
+    && SteamPlaceholderName.FromInstallDirectory("Bad/Name") == ""
+    && SteamPlaceholderName.FromInstallDirectory("") == "",
+    "placeholder name falls back to the install directory and rejects invalid names");
+
+// ── In-memory log buffer ─────────────────────────────────────────────────
+AppLog.Clear();
+AppLog.Info("hello");
+AppLog.Success("done");
+AppLog.Warning("careful");
+AppLog.Error("boom", new InvalidOperationException("inner"));
+var logged = AppLog.Snapshot();
+Check(logged.Count == 4 && logged[0].Level == "信息" && logged[3].Message.Contains("inner", StringComparison.Ordinal),
+    "log buffer keeps entries in order and records exception details");
+Check(logged[0].DisplayText.Contains("信息", StringComparison.Ordinal)
+    && logged[1].DisplayText.StartsWith("[", StringComparison.Ordinal),
+    "log entries render a timestamped display line");
+AppLog.Clear();
+Check(AppLog.Snapshot().Count == 0, "log buffer can be cleared");
 
 if (args.Contains("--live"))
 {

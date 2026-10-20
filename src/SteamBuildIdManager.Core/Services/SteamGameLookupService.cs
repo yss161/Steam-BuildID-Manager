@@ -51,6 +51,10 @@ public sealed class SteamGameLookupService
         if (string.IsNullOrWhiteSpace(selection.BuildId)) warnings.Add("public 分支没有可用 BuildID。");
         if (!depots.IsSuccess) warnings.Add(depots.Error);
 
+        var placeholder = SteamPlaceholderName.FromExecutables(selection.Executables);
+        if (string.IsNullOrWhiteSpace(placeholder))
+            placeholder = SteamPlaceholderName.FromInstallDirectory(selection.InstallDirectory);
+
         return new SteamGameSummary(
             AppId: appId,
             DisplayName: selection.DisplayName,
@@ -58,6 +62,7 @@ public sealed class SteamGameLookupService
             BuildId: selection.BuildId,
             PrimaryDepotId: primary?.Depot.Id ?? "",
             PrimaryManifest: primary?.Manifest ?? "",
+            PlaceholderExeName: placeholder,
             Depots: candidates,
             Executables: selection.Executables,
             Warnings: warnings);

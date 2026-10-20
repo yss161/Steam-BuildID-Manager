@@ -51,6 +51,7 @@ public sealed partial class GameConfigDialog : ContentDialog
         }
 
         SetBusy(true, "正在获取 Steam 信息…");
+        AppLog.Info($"开始获取 AppID {appId} 的游戏信息（api.steamcmd.net）。");
         _depots = Array.Empty<SteamDepotCandidate>();
         _fetchedAppId = null;
         DepotsText.Text = "正在读取 Depot…";
@@ -77,10 +78,27 @@ public sealed partial class GameConfigDialog : ContentDialog
                 ExecutableCombo.SelectedItem = executable.Candidate;
             }
 
+            // The placeholder EXE must match the filename Steam recorded in the appinfo,
+            // otherwise Steam cannot launch the configuration.
+            if (string.IsNullOrWhiteSpace(ExeBox.Text))
+            {
+                var inferred = SteamPlaceholderName.FromExecutables(selection.Executables);
+                if (string.IsNullOrWhiteSpace(inferred))
+                    inferred = SteamPlaceholderName.FromInstallDirectory(selection.InstallDirectory);
+                if (!string.IsNullOrWhiteSpace(inferred))
+                {
+                    ExeBox.Text = inferred;
+                    AppLog.Info($"已根据 AppID {appId} 自动填入 Steam 占位文件名：{inferred}");
+                }
+            }
+
             DepotsText.Text = _depots.Count == 0
                 ? "没有找到带有 public Manifest 的兼容 Depot。"
                 : string.Join("\n", _depots.Select(candidate =>
                     $"{candidate.Depot.Id} · Manifest {candidate.Manifest}"));
+
+            AppLog.Success($"已获取 AppID {appId}：{selection.DisplayName} · BuildID {selection.BuildId} · " +
+                           $"{_depots.Count} 个 Depot · 占位文件 {ExeBox.Text}");
 
             var errors = new[]
                 {
@@ -89,6 +107,7 @@ public sealed partial class GameConfigDialog : ContentDialog
                     string.IsNullOrWhiteSpace(selection.DisplayName) ? "没有获取到显示名称。" : "",
                     string.IsNullOrWhiteSpace(selection.InstallDirectory) ? "没有获取到安装目录名。" : "",
                     string.IsNullOrWhiteSpace(selection.BuildId) ? "public 分支没有可用 BuildID。" : "",
+                    string.IsNullOrWhiteSpace(ExeBox.Text) ? "没有获取到 Steam 占位文件名。" : "",
                 }
                 .Where(message => !string.IsNullOrWhiteSpace(message)).ToList();
 
@@ -96,12 +115,13 @@ public sealed partial class GameConfigDialog : ContentDialog
                 ShowStatus("信息不完整", string.Join("\n", errors) + "\n请核对后手动填写缺失字段。", InfoBarSeverity.Warning);
             else
                 ShowStatus("已获取 Steam 信息",
-                    $"BuildID {selection.BuildId} · {_depots.Count} 个 Depot。" +
+                    $"BuildID {selection.BuildId} · {_depots.Count} 个 Depot · 占位文件 {ExeBox.Text}。" +
                     (selection.Warnings.Count > 0 ? "\n" + string.Join("\n", selection.Warnings) : ""),
                     InfoBarSeverity.Success);
         }
         catch (Exception ex)
         {
+            AppLog.Error($"获取 AppID {appId} 失败", ex);
             ShowStatus("获取失败", ex.Message, InfoBarSeverity.Error);
         }
         finally
@@ -178,8 +198,7 @@ public sealed partial class GameConfigDialog : ContentDialog
         }
 
         var request = new GameConfigRequest(
-            AppId: appId,
-            DisplayName: NameBox.Text.Trim(),
+            AppId: appId,            DisplayName: NameBox.Text.Trim(),
             InstallDirectory: InstallDirBox.Text.Trim(),
             PlaceholderExeName: ExeBox.Text.Trim(),
             BuildId: BuildIdBox.Text.Trim(),

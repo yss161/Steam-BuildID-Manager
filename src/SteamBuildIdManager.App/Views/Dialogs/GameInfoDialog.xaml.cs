@@ -88,6 +88,7 @@ public sealed partial class GameInfoDialog : ContentDialog
         DepotIdText.Text = summary.PrimaryDepotDisplay;
         ManifestText.Text = summary.PrimaryManifestDisplay;
         ExecutableText.Text = summary.Executables.Count == 0 ? "—" : summary.Executables[0].Path;
+        PlaceholderText.Text = summary.PlaceholderExeDisplay;
         DepotsText.Text = summary.DepotSummary;
         LaunchCommand = summary.Executables.Count == 0
             ? ""
@@ -102,6 +103,7 @@ public sealed partial class GameInfoDialog : ContentDialog
         DepotIdText.Text = "—";
         ManifestText.Text = "—";
         ExecutableText.Text = "—";
+        PlaceholderText.Text = "—";
         DepotsText.Text = "尚未获取";
         LaunchCommand = "";
     }

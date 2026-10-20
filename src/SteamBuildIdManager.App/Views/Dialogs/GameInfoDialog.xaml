@@ -39,6 +39,7 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
                 <TextBlock Text="显示名称" FontSize="12"
@@ -65,6 +66,11 @@
                 <TextBlock Grid.Row="5" Text="启动 EXE" FontSize="12"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                 <TextBlock x:Name="ExecutableText" Grid.Row="5" Grid.Column="1" Text="—"
+                           FontFamily="Consolas" TextWrapping="Wrap"/>
+
+                <TextBlock Grid.Row="6" Text="Steam 占位文件名" FontSize="12"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                <TextBlock x:Name="PlaceholderText" Grid.Row="6" Grid.Column="1" Text="—"
                            FontFamily="Consolas" TextWrapping="Wrap"/>
             </Grid>
         </Border>

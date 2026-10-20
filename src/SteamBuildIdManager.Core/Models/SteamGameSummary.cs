@@ -10,12 +10,17 @@ public sealed record SteamGameSummary(
     string BuildId,
     string PrimaryDepotId,
     string PrimaryManifest,
+    string PlaceholderExeName,
     IReadOnlyList<SteamDepotCandidate> Depots,
     IReadOnlyList<SteamExecutableCandidate> Executables,
     IReadOnlyList<string> Warnings)
 {
     public bool HasPrimaryDepot => !string.IsNullOrWhiteSpace(PrimaryDepotId)
         && !string.IsNullOrWhiteSpace(PrimaryManifest);
+
+    public string PlaceholderExeDisplay => string.IsNullOrWhiteSpace(PlaceholderExeName)
+        ? "未找到"
+        : PlaceholderExeName;
 
     public string PrimaryDepotDisplay => HasPrimaryDepot
         ? PrimaryDepotId

@@ -3,7 +3,7 @@
 ; The publish folder must exist first (see README).
 
 #define MyAppName "Steam BuildID 管理器"
-#define MyAppVersion "1.2.0"
+#define MyAppVersion "1.3.0"
 #define MyAppPublisher "yss161"
 #define MyAppURL "https://github.com/yss161/Steam-BuildID-Manager"
 #define MyAppExeName "SteamBuildIDManager.exe"
@@ -37,7 +37,7 @@ CloseApplications=yes
 CloseApplicationsFilter=SteamBuildIDManager.exe
 RestartApplications=no
 LicenseFile=..\LICENSE
-VersionInfoVersion=1.2.0.0
+VersionInfoVersion=1.3.0.0
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription={#MyAppName} 安装程序
 VersionInfoProductName={#MyAppName}

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
@@ -15,6 +16,8 @@ public sealed partial class LibraryPage : Page
     private readonly SettingsService _settingsService = new();
     private readonly BuildIdUpdateService _updateService = new(new SteamBuildIdProvider());
     private readonly ObservableCollection<ManifestRow> _rows = new();
+    private readonly DispatcherQueue _dispatcher = DispatcherQueue.GetForCurrentThread();
+    private readonly List<LogEntry> _logEntries = new();
 
     private AppSettings _settings = new();
     private IReadOnlyList<AcfManifest> _manifests = Array.Empty<AcfManifest>();
@@ -25,6 +28,59 @@ public sealed partial class LibraryPage : Page
     {
         InitializeComponent();
         ManifestList.ItemsSource = _rows;
+        AppLog.EntryAdded += OnLogEntryAdded;
+        Unloaded += (_, _) => AppLog.EntryAdded -= OnLogEntryAdded;
+
+        foreach (var entry in AppLog.Snapshot()) _logEntries.Add(entry);
+        RenderLog();
+    }
+
+    private void OnLogEntryAdded(object? sender, LogEntry entry)
+    {
+        // Services log from background threads; marshal before touching UI collections.
+        if (!_dispatcher.TryEnqueue(() =>
+            {
+                _logEntries.Add(entry);
+                if (_logEntries.Count > 200) _logEntries.RemoveRange(0, _logEntries.Count - 200);
+                RenderLog(scrollToEnd: true);
+            }))
+        {
+            return;
+        }
+    }
+
+    private void RenderLog(bool scrollToEnd = false)
+    {
+        LogText.Text = _logEntries.Count == 0
+            ? "暂无日志。"
+            : string.Join(Environment.NewLine, _logEntries.Select(entry => entry.DisplayText));
+        LogHintText.Text = $"{_logEntries.Count} 条 · 同时写入 {Path.Combine(AppPaths.LogDirectory, "app.log")}";
+        if (scrollToEnd) LogScroll.ChangeView(null, LogScroll.ScrollableHeight, null);
+    }
+
+    private void ClearLog_Click(object sender, RoutedEventArgs e)
+    {
+        AppLog.Clear();
+        _logEntries.Clear();
+        RenderLog();
+        AppLog.Info("日志已清空。");
+    }
+
+    private void OpenLogFolder_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Directory.CreateDirectory(AppPaths.LogDirectory);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = AppPaths.LogDirectory,
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            ShowInfo("无法打开日志目录", ex.Message, InfoBarSeverity.Warning);
+        }
     }
 
     protected override async void OnNavigatedTo(NavigationEventArgs e)
@@ -54,14 +110,17 @@ public sealed partial class LibraryPage : Page
         }
 
         SetBusy(true, "正在扫描 ACF…");
+        AppLog.Info($"开始扫描 Steam 库：{string.Join("；", roots)}");
         try
         {
             var scan = await Task.Run(() => _updateService.Scan(roots));
             _manifests = scan.Manifests;
             RebuildRows();
+            AppLog.Success($"扫描完成：找到 {_manifests.Count} 个 ACF，显示 {_rows.Count} 个配置。");
 
             if (scan.Errors.Count > 0)
             {
+                foreach (var error in scan.Errors.Take(3)) AppLog.Warning($"ACF 读取失败：{error}");
                 ShowInfo("部分 ACF 无法读取",
                     string.Join("\n", scan.Errors.Take(3)) + (scan.Errors.Count > 3 ? $"\n…另有 {scan.Errors.Count - 3} 个错误" : ""),
                     InfoBarSeverity.Warning);
@@ -73,6 +132,7 @@ public sealed partial class LibraryPage : Page
         }
         catch (Exception ex)
         {
+            AppLog.Error("扫描 Steam 库失败", ex);
             ShowInfo("扫描失败", ex.Message, InfoBarSeverity.Error);
         }
         finally
@@ -136,6 +196,7 @@ public sealed partial class LibraryPage : Page
         }
 
         SetBusy(true, $"正在检测 {targets.Count} 个配置…");
+        AppLog.Info($"开始检测 {targets.Count} 个配置的 BuildID。");
         try
         {
             var progress = new Progress<BuildIdCheckResult>(result =>
@@ -148,6 +209,11 @@ public sealed partial class LibraryPage : Page
             var results = await _updateService.CheckAsync(targets, forceRefresh, progress);
             var errors = results.Count(result => result.State == BuildIdState.Error);
             var updates = results.Count(result => result.State == BuildIdState.UpdateAvailable);
+            foreach (var result in results.Where(r => r.State == BuildIdState.UpdateAvailable))
+                AppLog.Success($"{result.Manifest.Name}（{result.Manifest.AppId}）{result.Manifest.BuildId} → {result.LatestBuildId}");
+            foreach (var result in results.Where(r => r.State == BuildIdState.Error))
+                AppLog.Warning($"{result.Manifest.Name}（{result.Manifest.AppId}）检测失败：{result.Message}");
+            AppLog.Info($"检测完成：{results.Count} 个，{updates} 个可更新，{errors} 个失败。");
             ShowInfo("检测完成",
                 errors == 0
                     ? $"{results.Count} 个配置完成检测，{updates} 个发现 BuildID 更新。"
@@ -178,6 +244,7 @@ public sealed partial class LibraryPage : Page
         if (!await ConfirmUpdateAsync(targets)) return;
 
         SetBusy(true, $"正在更新 {targets.Count} 个配置…");
+        AppLog.Info($"开始更新 {targets.Count} 个配置的 BuildID。");
         try
         {
             var checks = targets.Select(row => new BuildIdCheckResult(
@@ -192,7 +259,10 @@ public sealed partial class LibraryPage : Page
                 row?.MarkUpdated(updated.UpdatedManifest, updated.Write.NewBuildId);
                 var index = manifests.FindIndex(item => item.AppId == updated.UpdatedManifest.AppId);
                 if (index >= 0) manifests[index] = updated.UpdatedManifest;
+                AppLog.Success($"{updated.UpdatedManifest.Name}（{updated.UpdatedManifest.AppId}）已更新为 {updated.Write.NewBuildId}" +
+                               (updated.Write.BackupPath == null ? "" : $"，备份：{updated.Write.BackupPath}"));
             }
+            foreach (var failure in result.Failures) AppLog.Error($"更新失败：{failure}");
             _manifests = manifests;
 
             if (result.HasFailures)
@@ -212,6 +282,7 @@ public sealed partial class LibraryPage : Page
         }
         catch (Exception ex)
         {
+            AppLog.Error("更新 BuildID 失败", ex);
             ShowInfo("更新失败", ex.Message, InfoBarSeverity.Error);
         }
         finally
@@ -343,6 +414,9 @@ public sealed partial class LibraryPage : Page
     private async Task OnConfigSavedAsync(GameConfigWriteResult saved)
     {
         var copied = TryCopyToClipboard(saved.LaunchCommand);
+        AppLog.Success($"已写入 Steam 配置：{saved.AcfPath}");
+        AppLog.Info($"占位文件：{saved.PlaceholderExePath}" +
+                    (copied ? "；启动命令已复制到剪贴板。" : ""));
         await RefreshAsync(autoCheck: false);
         ShowInfo("Steam 配置已写入",
             $"ACF：{saved.AcfPath}\n占位文件：{saved.PlaceholderExePath}\n" +

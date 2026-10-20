@@ -54,7 +54,10 @@ BuildIdUpdateService ──► api.steamcmd.net/v1/info/<AppID> ──► public
 3. 构建产物 `Steam-BuildID-Manager-win-x64.zip` 上传到 Actions 的 Artifacts。
 4. 推送 `v*` 标签时，同一个 zip 会自动附加到 GitHub Release。
 
-下载方式：打开 [Actions](https://github.com/yss161/Steam-BuildID-Manager/actions/workflows/build.yml)，选择最近一次成功的 `build`，在页面底部下载 `Steam-BuildID-Manager-win-x64`。
+下载方式：
+
+1. 稳定版：从 [Releases](https://github.com/yss161/Steam-BuildID-Manager/releases) 下载 `Steam-BuildID-Manager-win-x64.zip`。
+2. 最新构建：打开 [Actions](https://github.com/yss161/Steam-BuildID-Manager/actions/workflows/build.yml)，选择最近一次成功的 `build`，在页面底部下载 `Steam-BuildID-Manager-win-x64`。
 
 ## 本地构建
 

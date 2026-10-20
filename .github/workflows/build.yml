@@ -30,7 +30,7 @@ jobs:
         run: dotnet run --project tests/SteamBuildIdManager.Core.Tests/SteamBuildIdManager.Core.Tests.csproj -c Release --no-restore
 
   publish:
-    name: Build win-x64 package
+    name: Build portable win-x64 package
     runs-on: windows-latest
     needs: test
     steps:
@@ -68,20 +68,94 @@ jobs:
             throw "resources.pri was not produced; WinUI would fail to start."
           }
 
-      - name: Create zip
+      - name: Create portable zip
         shell: pwsh
         run: Compress-Archive -Path publish\* -DestinationPath Steam-BuildID-Manager-win-x64.zip -CompressionLevel Optimal
 
-      - name: Upload artifact
+      - name: Upload portable artifact
         uses: actions/upload-artifact@v4
         with:
           name: Steam-BuildID-Manager-win-x64
           path: Steam-BuildID-Manager-win-x64.zip
           if-no-files-found: error
 
-      - name: Attach zip to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+  installer:
+    name: Build installer
+    runs-on: windows-latest
+    needs: publish
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download portable build
+        uses: actions/download-artifact@v4
+        with:
+          name: Steam-BuildID-Manager-win-x64
+          path: artifacts
+
+      - name: Extract portable build
+        shell: pwsh
+        run: Expand-Archive -Path "artifacts/Steam-BuildID-Manager-win-x64.zip" -DestinationPath "publish" -Force
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Compile installer
+        shell: pwsh
+        run: |
+          $iscc = @(
+            "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+            "C:\Program Files\Inno Setup 6\ISCC.exe"
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) { throw "ISCC.exe was not found after installing Inno Setup." }
+          & $iscc "installer\SteamBuildIDManager.iss"
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed with exit code $LASTEXITCODE." }
+
+      - name: Smoke test install and uninstall
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem "artifacts/installer" -Filter "*.exe" | Select-Object -First 1
+          if (-not $setup) { throw "Installer output was not produced." }
+
+          $dir = Join-Path $env:RUNNER_TEMP "sbm-install-smoke"
+          $install = Start-Process -FilePath $setup.FullName `
+            -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/NOICONS', "/DIR=$dir" `
+            -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "Installer exited with code $($install.ExitCode)." }
+          if (-not (Test-Path (Join-Path $dir "SteamBuildIDManager.exe"))) { throw "Installed exe is missing." }
+          if (-not (Test-Path (Join-Path $dir "SteamBuildIDManager.pri"))) { throw "Installed PRI is missing." }
+
+          $uninstall = Start-Process -FilePath (Join-Path $dir "unins000.exe") `
+            -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' `
+            -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0) { throw "Uninstaller exited with code $($uninstall.ExitCode)." }
+          for ($i = 0; $i -lt 30 -and (Test-Path (Join-Path $dir "SteamBuildIDManager.exe")); $i++) {
+            Start-Sleep -Seconds 1
+          }
+          if (Test-Path (Join-Path $dir "SteamBuildIDManager.exe")) { throw "Uninstaller left files behind." }
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Steam-BuildID-Manager-Setup
+          path: artifacts/installer/*.exe
+          if-no-files-found: error
+
+  release:
+    name: Attach release assets
+    runs-on: windows-latest
+    needs: [publish, installer]
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+
+      - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: Steam-BuildID-Manager-win-x64.zip
+          files: |
+            release-assets/**/*.zip
+            release-assets/**/*.exe
           generate_release_notes: true

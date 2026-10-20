@@ -51,13 +51,23 @@ BuildIdUpdateService ──► api.steamcmd.net/v1/info/<AppID> ──► public
 
 1. 每次推送或提交 Pull Request 时，自动运行 73 项核心回归测试。
 2. 测试通过后，在 `windows-latest` 上以 `win-x64` 自包含方式发布 WinUI 3 应用。
-3. 构建产物 `Steam-BuildID-Manager-win-x64.zip` 上传到 Actions 的 Artifacts。
-4. 推送 `v*` 标签时，同一个 zip 会自动附加到 GitHub Release。
+3. 用 Inno Setup 生成按用户安装的安装包，并在 CI 中执行静默安装、启动文件检查和静默卸载冒烟测试。
+4. 便携版 `Steam-BuildID-Manager-win-x64.zip` 和安装版 `Steam-BuildID-Manager-Setup-1.0.1.exe` 都会上传到 Actions Artifacts。
+5. 推送 `v*` 标签时，两个产物会自动附加到 GitHub Release。
 
 下载方式：
 
-1. 稳定版：从 [Releases](https://github.com/yss161/Steam-BuildID-Manager/releases) 下载 `Steam-BuildID-Manager-win-x64.zip`。
-2. 最新构建：打开 [Actions](https://github.com/yss161/Steam-BuildID-Manager/actions/workflows/build.yml)，选择最近一次成功的 `build`，在页面底部下载 `Steam-BuildID-Manager-win-x64`。
+1. **安装版**：从 [Releases](https://github.com/yss161/Steam-BuildID-Manager/releases) 下载 `Steam-BuildID-Manager-Setup-1.0.1.exe`。
+2. **便携版**：从 Releases 下载 `Steam-BuildID-Manager-win-x64.zip`，解压后直接运行。
+3. **最新构建**：打开 [Actions](https://github.com/yss161/Steam-BuildID-Manager/actions/workflows/build.yml)，选择最近一次成功的 `build`，在页面底部下载安装版或便携版。
+
+## 安装版
+
+1. 双击 `Steam-BuildID-Manager-Setup-1.0.1.exe`，按向导完成安装，不需要管理员权限。
+2. 默认安装到 `%LocalAppData%\Programs\SteamBuildIDManager`，并创建开始菜单快捷方式；桌面快捷方式默认不勾选。
+3. 安装程序会检测并关闭正在运行的旧版本，安装完成后可直接启动。
+4. 卸载入口在 Windows“设置 → 应用 → 已安装的应用”，不会删除用户设置和 ACF 备份。
+5. 安装包界面支持简体中文和英文，按系统语言自动选择。
 
 ## 本地构建
 
@@ -76,9 +86,12 @@ dotnet publish src/SteamBuildIdManager.App/SteamBuildIdManager.App.csproj `
   -c Release -r win-x64 --self-contained true `
   -p:Platform=x64 -p:WindowsAppSDKSelfContained=true `
   -p:PublishReadyToRun=false -o publish
+
+# 生成安装包（需要 Inno Setup 6）
+& "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" installer\SteamBuildIDManager.iss
 ```
 
-发布目录中的 `SteamBuildIDManager.exe` 可直接运行，不要求机器预装 Windows App SDK 运行时。
+发布目录中的 `SteamBuildIDManager.exe` 可直接运行，不要求机器预装 Windows App SDK 运行时。安装包输出到 `artifacts\installer\`，构建说明见 [installer/README.md](installer/README.md)。
 
 ## 项目结构
 
@@ -86,7 +99,8 @@ dotnet publish src/SteamBuildIdManager.App/SteamBuildIdManager.App.csproj `
 src/SteamBuildIdManager.Core/   与 UI 无关的 ACF 解析、BuildID 检测、备份与写入
 src/SteamBuildIdManager.App/    WinUI 3 界面、设置页和配置对话框
 tests/SteamBuildIdManager.Core.Tests/  无第三方测试框架的回归测试
-.github/workflows/build.yml     GitHub Actions 云编译
+installer/                      Inno Setup 安装包脚本与简体中文语言文件
+.github/workflows/build.yml     GitHub Actions 云编译（测试、便携版、安装版、Release）
 ```
 
 核心测试覆盖：ACF 解析与字段保留、BuildID 数值比较、缺失 BuildID 插入、备份保留策略、扫描与批量更新、陈旧扫描拒绝、Steam 信息解析、库路径解析、配置生成、设置读写和 HTTP 取消。

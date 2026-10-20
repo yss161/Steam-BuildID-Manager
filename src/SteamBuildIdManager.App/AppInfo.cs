@@ -2,7 +2,7 @@ namespace SteamBuildIdManager;
 
 public static class AppInfo
 {
-    public const string Version = "1.0.0";
+    public const string Version = "1.0.1";
     public const string AppName = "Steam BuildID 管理器";
     public const string WindowTitle = AppName + " v" + Version;
     public const string OriginalRepository = "https://github.com/Clearlove0923/SteamCN-GameLauncher";

@@ -1,5 +1,20 @@
 # 更新记录
 
+## v1.3.1 — 2026-10-21
+
+### 修复
+
+1. 修复“更新后 Steam 仍提示需要更新”：更新时不再只改 `buildid`，同时同步 `InstalledDepots` 中每个 Depot 的 `manifest`，并补齐 ACF 里缺失的 Depot。
+2. 修复 `StateFlags` 的“需要更新”标志位（bit 2）未被清除的问题，更新后与 Steam 认为已安装的状态一致。
+3. 检测逻辑同时比较 `buildid`、Depot Manifest 和 `StateFlags`，三者任一不一致都会标记为“发现更新”，并在提示中说明具体原因。
+4. 更新确认框和运行日志会说明本次同时完成 BuildID、Depot Manifest 与 StateFlags 修复。
+5. 新增 13 项回归测试，覆盖 Depot Manifest 同步、缺失 Depot 补全、StateFlags 修复与漂移检测，核心测试总数增至 115 项。
+
+### 说明
+
+1. 更新前请完全退出 Steam，否则客户端会用内存中的旧状态覆盖修改。
+2. 更新仍会自动备份原 ACF，备份位置与之前一致。
+
 ## v1.3.0 — 2026-10-20
 
 ### 更新功能

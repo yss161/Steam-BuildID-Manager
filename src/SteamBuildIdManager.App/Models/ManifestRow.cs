@@ -20,6 +20,7 @@ public sealed class ManifestRow : INotifyPropertyChanged
 
     public AcfManifest Manifest { get; private set; }
     public string? LatestBuildId { get; private set; }
+    public IReadOnlyDictionary<string, string>? LatestDepotManifests { get; private set; }
     public BuildIdState State { get; private set; } = BuildIdState.Unknown;
     public string Message { get; private set; } = "尚未检测";
 
@@ -73,6 +74,7 @@ public sealed class ManifestRow : INotifyPropertyChanged
     {
         Manifest = result.Manifest;
         LatestBuildId = result.LatestBuildId;
+        LatestDepotManifests = result.LatestDepotManifests;
         State = result.State;
         Message = result.Message;
         RaiseAll();
@@ -82,6 +84,7 @@ public sealed class ManifestRow : INotifyPropertyChanged
     {
         Manifest = manifest;
         LatestBuildId = latestBuildId;
+        LatestDepotManifests = null;
         State = BuildIdState.UpToDate;
         Message = $"已更新到 {latestBuildId}";
         RaiseAll();
@@ -91,6 +94,7 @@ public sealed class ManifestRow : INotifyPropertyChanged
     {
         State = BuildIdState.Unknown;
         LatestBuildId = null;
+        LatestDepotManifests = null;
         Message = "尚未检测";
         RaiseAll();
     }
@@ -99,6 +103,7 @@ public sealed class ManifestRow : INotifyPropertyChanged
     public void CopyStateFrom(ManifestRow other)
     {
         LatestBuildId = other.LatestBuildId;
+        LatestDepotManifests = other.LatestDepotManifests;
         State = other.State;
         Message = other.Message;
         RaiseAll();

@@ -27,6 +27,18 @@ public static class AcfDocument
         "\"(?<id>[0-9]+)\"[ \\t]*(?:\r?\n)?[ \\t]*\\{",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
+    private static readonly Regex ManifestLine = new(
+        "^[ \\t]*\"manifest\"[ \\t]+\"(?<value>[^\"]*)\"",
+        RegexOptions.Multiline | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex StateFlagsLine = new(
+        "^(?<prefix>[ \\t]*\"StateFlags\"[ \\t]+\")(?<value>[^\"]*)(?<quote>\")",
+        RegexOptions.Multiline | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex UpdateResultLine = new(
+        "^(?<prefix>[ \\t]*\"UpdateResult\"[ \\t]+\")(?<value>[^\"]*)(?<quote>\")",
+        RegexOptions.Multiline | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
     public static AcfManifest Parse(string filePath, string libraryPath, string content)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
@@ -60,7 +72,8 @@ public static class AcfDocument
             DepotIds: ReadDepotIds(content),
             LastWriteTime: File.Exists(filePath)
                 ? new DateTimeOffset(File.GetLastWriteTimeUtc(filePath), TimeSpan.Zero)
-                : DateTimeOffset.UtcNow);
+                : DateTimeOffset.UtcNow,
+            DepotManifests: ReadDepotManifests(content));
     }
 
     public static bool TryParse(string filePath, string libraryPath, string content,
@@ -128,6 +141,135 @@ public static class AcfDocument
             .Distinct(StringComparer.Ordinal)
             .ToList();
     }
+
+    /// <summary>DepotID → manifest GID currently recorded in InstalledDepots.</summary>
+    public static IReadOnlyDictionary<string, string> ReadDepotManifests(string content)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var block in EnumerateDepotBlocks(content))
+        {
+            var match = ManifestLine.Match(block.Body);
+            if (match.Success) result[block.DepotId] = match.Groups["value"].Value;
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Update buildid, refresh the manifest GID of every depot Steam knows about, and clear the
+    /// "update required" state bit. Steam compares depot manifests as well as buildid, so patching
+    /// buildid alone leaves the game showing "需要更新" in the client.
+    /// </summary>
+    public static string WithBuildIdAndDepots(string content, string newBuildId,
+        IReadOnlyDictionary<string, string>? depotManifests, bool clearUpdateState = true)
+    {
+        var result = WithBuildId(content, newBuildId);
+        if (depotManifests is { Count: > 0 })
+            result = WithDepotManifests(result, depotManifests);
+        if (clearUpdateState)
+            result = ClearUpdateRequiredFlag(result);
+        return result;
+    }
+
+    /// <summary>Rewrite existing depot manifests and append depots the ACF is missing.</summary>
+    public static string WithDepotManifests(string content, IReadOnlyDictionary<string, string> manifests)
+    {
+        ArgumentNullException.ThrowIfNull(manifests);
+        if (manifests.Count == 0) return content;
+
+        var newline = content.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+        var edits = new List<(int Start, int Length, string Text)>();
+        var present = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var block in EnumerateDepotBlocks(content))
+        {
+            present.Add(block.DepotId);
+            if (!manifests.TryGetValue(block.DepotId, out var manifest) || string.IsNullOrWhiteSpace(manifest))
+                continue;
+
+            var match = ManifestLine.Match(block.Body);
+            if (!match.Success) continue;
+            var value = match.Groups["value"];
+            edits.Add((block.BodyStart + value.Index, value.Length, manifest));
+        }
+
+        // Append depots the manifest file does not list yet; Steam would otherwise keep asking for them.
+        var missing = manifests
+            .Where(pair => !present.Contains(pair.Key) && !string.IsNullOrWhiteSpace(pair.Value))
+            .ToList();
+        if (missing.Count > 0 && TryGetInstalledDepotsSpan(content, out _, out var closeBrace))
+        {
+            // Insert just before the InstalledDepots closing brace, matching its indentation.
+            var lineStart = content.LastIndexOf('\n', Math.Max(closeBrace - 1, 0));
+            var insertAt = lineStart >= 0 ? lineStart + 1 : closeBrace;
+            var builder = new System.Text.StringBuilder();
+            foreach (var (depotId, manifest) in missing)
+            {
+                builder.Append('\t').Append('"').Append(depotId).Append('"').Append(newline);
+                builder.Append('\t').Append('{').Append(newline);
+                builder.Append("\t\t\"manifest\"\t\t\"").Append(manifest).Append('"').Append(newline);
+                builder.Append("\t\t\"size\"\t\t\"0\"").Append(newline);
+                builder.Append('\t').Append('}').Append(newline);
+            }
+            edits.Add((insertAt, 0, builder.ToString()));
+        }
+
+        // Apply from the end so earlier offsets stay valid.
+        foreach (var edit in edits.OrderByDescending(item => item.Start))
+            content = content.Remove(edit.Start, edit.Length).Insert(edit.Start, edit.Text);
+        return content;
+    }
+
+    /// <summary>Clear the "update required" bit (2) so Steam stops offering an update.</summary>
+    public static string ClearUpdateRequiredFlag(string content)
+    {
+        var flags = ReadString(content, "StateFlags");
+        if (int.TryParse(flags, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
+            && (value & 2) != 0)
+        {
+            var cleared = value & ~2;
+            content = StateFlagsLine.Replace(content, match =>
+                match.Groups["prefix"].Value + cleared.ToString(CultureInfo.InvariantCulture) + match.Groups["quote"].Value, 1);
+        }
+
+        return UpdateResultLine.Replace(content, match =>
+            match.Groups["prefix"].Value + "0" + match.Groups["quote"].Value, 1);
+    }
+
+    private static IEnumerable<DepotBlock> EnumerateDepotBlocks(string content)
+    {
+        if (!TryGetInstalledDepotsSpan(content, out var openBrace, out var closeBrace)) yield break;
+
+        var blockStart = openBrace + 1;
+        var blockLength = closeBrace - blockStart;
+        if (blockLength <= 0) yield break;
+        var block = content.Substring(blockStart, blockLength);
+
+        foreach (Match match in DepotKey.Matches(block))
+        {
+            var braceOffset = match.Index + match.Length - 1;
+            var end = FindMatchingBrace(block, braceOffset);
+            if (end < 0) continue;
+            var bodyStart = braceOffset + 1;
+            yield return new DepotBlock(
+                match.Groups["id"].Value,
+                blockStart + bodyStart,
+                block.Substring(bodyStart, end - bodyStart));
+        }
+    }
+
+    private static bool TryGetInstalledDepotsSpan(string content, out int openBrace, out int closeBrace)
+    {
+        openBrace = -1;
+        closeBrace = -1;
+        var header = InstalledDepotsHeader.Match(content);
+        if (!header.Success) return false;
+        openBrace = content.IndexOf('{', header.Index);
+        if (openBrace < 0) return false;
+        closeBrace = FindMatchingBrace(content, openBrace);
+        return closeBrace > openBrace;
+    }
+
+    private readonly record struct DepotBlock(string DepotId, int BodyStart, string Body);
 
     private static int FindMatchingBrace(string text, int openBrace)
     {

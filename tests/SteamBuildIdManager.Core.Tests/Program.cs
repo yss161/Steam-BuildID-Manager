@@ -72,6 +72,96 @@ Check(BuildIdComparer.Compare("111", "222") == -1 && BuildIdComparer.Compare("22
 Check(BuildIdComparer.Compare("", "222") == -1 && BuildIdComparer.Compare("111", "abc") == null,
     "missing current BuildID can be updated and invalid latest is rejected");
 
+// ── Depot manifest synchronisation ───────────────────────────────────────
+var localDepots = AcfDocument.ReadDepotManifests(sampleAcf);
+Check(localDepots.Count == 2 && localDepots["101"] == "201" && localDepots["102"] == "202",
+    "ACF parser reads InstalledDepots manifest GIDs");
+Check(manifest.Manifests["101"] == "201", "scanned manifest exposes depot manifests");
+
+var synced = AcfDocument.WithBuildIdAndDepots(sampleAcf, "222", new Dictionary<string, string>
+{
+    ["101"] = "901",
+    ["102"] = "902",
+    ["103"] = "903",
+});
+var syncedManifest = AcfDocument.Parse("appmanifest_100.acf", "", synced);
+Check(syncedManifest.BuildId == "222" && syncedManifest.TargetBuildId == "0",
+    "sync updates buildid and clears TargetBuildID");
+Check(syncedManifest.Manifests["101"] == "901" && syncedManifest.Manifests["102"] == "902",
+    "sync rewrites existing depot manifest GIDs");
+Check(syncedManifest.Manifests.TryGetValue("103", out var appended) && appended == "903",
+    "sync appends depots the ACF is missing");
+Check(synced.Contains("\"LauncherPath\"\t\t\"C:\\\\Steam\\\\steam.exe\"")
+    && synced.Contains("\"language\"\t\t\"schinese\""),
+    "sync preserves unrelated ACF fields");
+
+var updateRequired = sampleAcf.Replace("\"StateFlags\"\t\t\"4\"", "\"StateFlags\"\t\t\"6\"");
+var clearedFlags = AcfDocument.WithBuildIdAndDepots(updateRequired, "222", null);
+Check(clearedFlags.Contains("\"StateFlags\"\t\t\"4\""),
+    "sync clears the update-required StateFlags bit");
+
+// ── Depot drift detection through the update service ─────────────────────
+var driftRoot = Path.Combine(Path.GetTempPath(), "sbim-drift-" + Guid.NewGuid().ToString("N"));
+try
+{
+    var driftLibrary = Path.Combine(driftRoot, "lib");
+    var driftSteamApps = Path.Combine(driftLibrary, "steamapps");
+    Directory.CreateDirectory(driftSteamApps);
+    await File.WriteAllTextAsync(Path.Combine(driftSteamApps, "appmanifest_100.acf"), sampleAcf);
+
+    var driftProvider = new StubPublicBuildProvider("111", new Dictionary<string, string>
+    {
+        ["101"] = "999", // local value is 201
+        ["102"] = "202", // already matches
+    });
+    var driftService = new BuildIdUpdateService(driftProvider,
+        new ManifestFileService(Path.Combine(driftRoot, "backups")));
+    var driftScan = driftService.Scan(new[] { driftLibrary }).Manifests.Single();
+    var driftCheck = (await driftService.CheckAsync(new[] { driftScan })).Single();
+
+    Check(driftCheck.State == BuildIdState.UpdateAvailable && driftCheck.HasDepotDrift,
+        "equal BuildID with a stale depot manifest is still reported as update available");
+
+    var driftWrite = await driftService.UpdateAsync(driftCheck.Manifest, driftCheck.LatestBuildId!,
+        driftCheck.LatestDepotManifests);
+    Check(driftWrite.UpdatedManifest.BuildId == "111"
+        && driftWrite.UpdatedManifest.Manifests["101"] == "999",
+        "one-click update refreshes depot manifests even when BuildID is unchanged");
+
+    var matchedProvider = new StubPublicBuildProvider("111", new Dictionary<string, string>
+    {
+        ["101"] = "201",
+        ["102"] = "202",
+    });
+    var matchedService = new BuildIdUpdateService(matchedProvider,
+        new ManifestFileService(Path.Combine(driftRoot, "backups2")));
+    var matchedCheck = (await matchedService.CheckAsync(new[] { driftScan })).Single();
+    Check(matchedCheck.State == BuildIdState.UpToDate && !matchedCheck.HasDepotDrift,
+        "matching depot manifests keep the entry up to date");
+
+    // Steam keeps showing "需要更新" while StateFlags bit 2 is set, even with an equal BuildID.
+    var flagRoot = Path.Combine(driftRoot, "flag");
+    var flagSteamApps = Path.Combine(flagRoot, "steamapps");
+    Directory.CreateDirectory(flagSteamApps);
+    await File.WriteAllTextAsync(Path.Combine(flagSteamApps, "appmanifest_100.acf"),
+        sampleAcf.Replace("\"StateFlags\"\t\t\"4\"", "\"StateFlags\"\t\t\"6\""));
+    var flagScan = matchedService.Scan(new[] { flagRoot }).Manifests.Single();
+    Check(flagScan.HasUpdateRequiredFlag, "scanned manifest exposes the update-required StateFlags bit");
+    var flagCheck = (await matchedService.CheckAsync(new[] { flagScan })).Single();
+    Check(flagCheck.State == BuildIdState.UpdateAvailable
+        && flagCheck.Message.Contains("StateFlags", StringComparison.Ordinal),
+        "a set update-required flag is reported as repairable even when BuildID matches");
+
+    var flagWrite = await matchedService.UpdateAsync(flagCheck.Manifest, flagCheck.LatestBuildId!,
+        flagCheck.LatestDepotManifests);
+    Check(!flagWrite.UpdatedManifest.HasUpdateRequiredFlag,
+        "one-click update clears the update-required StateFlags bit");
+}
+finally
+{
+    try { if (Directory.Exists(driftRoot)) Directory.Delete(driftRoot, recursive: true); } catch { }
+}
+
 // ── Local Steam account discovery ────────────────────────────────────────
 const string loginUsersVdf = """
 "users"
@@ -583,6 +673,17 @@ sealed class FakeBuildIdProvider(IReadOnlyDictionary<string, string> values) : I
         lock (Calls) Calls.Add(appId);
         return Task.FromResult(values.TryGetValue(appId, out var value) ? value : null);
     }
+}
+
+sealed class StubPublicBuildProvider(string buildId, IReadOnlyDictionary<string, string> manifests)
+    : IBuildIdProvider
+{
+    public Task<string?> GetLatestBuildIdAsync(string appId, bool forceRefresh = false,
+        CancellationToken cancellationToken = default) => Task.FromResult<string?>(buildId);
+
+    public Task<SteamPublicBuild?> GetLatestBuildAsync(string appId, bool forceRefresh = false,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<SteamPublicBuild?>(new SteamPublicBuild(buildId, manifests));
 }
 
 sealed class StubAppInfoService(string buildId) : ISteamAppInfoService

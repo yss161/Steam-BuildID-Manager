@@ -210,7 +210,7 @@ public sealed partial class LibraryPage : Page
             var errors = results.Count(result => result.State == BuildIdState.Error);
             var updates = results.Count(result => result.State == BuildIdState.UpdateAvailable);
             foreach (var result in results.Where(r => r.State == BuildIdState.UpdateAvailable))
-                AppLog.Success($"{result.Manifest.Name}（{result.Manifest.AppId}）{result.Manifest.BuildId} → {result.LatestBuildId}");
+                AppLog.Warning($"{result.Manifest.Name}（{result.Manifest.AppId}）需同步：{result.Message}");
             foreach (var result in results.Where(r => r.State == BuildIdState.Error))
                 AppLog.Warning($"{result.Manifest.Name}（{result.Manifest.AppId}）检测失败：{result.Message}");
             AppLog.Info($"检测完成：{results.Count} 个，{updates} 个可更新，{errors} 个失败。");
@@ -243,12 +243,15 @@ public sealed partial class LibraryPage : Page
 
         if (!await ConfirmUpdateAsync(targets)) return;
 
-        SetBusy(true, $"正在更新 {targets.Count} 个配置…");
-        AppLog.Info($"开始更新 {targets.Count} 个配置的 BuildID。");
+        SetBusy(true, $"正在同步 {targets.Count} 个配置…");
+        AppLog.Info($"开始同步 {targets.Count} 个配置（BuildID + Depot Manifest + StateFlags）。");
         try
         {
             var checks = targets.Select(row => new BuildIdCheckResult(
-                row.Manifest, row.LatestBuildId, BuildIdState.UpdateAvailable, "待更新")).ToList();
+                row.Manifest, row.LatestBuildId, BuildIdState.UpdateAvailable, "待更新")
+            {
+                LatestDepotManifests = row.LatestDepotManifests,
+            }).ToList();
             var progress = new Progress<string>(message => BusyText.Text = message);
             var result = await _updateService.UpdateAllAsync(checks, progress);
 
@@ -257,9 +260,10 @@ public sealed partial class LibraryPage : Page
             {
                 var row = _rows.FirstOrDefault(item => item.AppId == updated.UpdatedManifest.AppId);
                 row?.MarkUpdated(updated.UpdatedManifest, updated.Write.NewBuildId);
-                var index = manifests.FindIndex(item => item.AppId == updated.UpdatedManifest.AppId);
-                if (index >= 0) manifests[index] = updated.UpdatedManifest;
-                AppLog.Success($"{updated.UpdatedManifest.Name}（{updated.UpdatedManifest.AppId}）已更新为 {updated.Write.NewBuildId}" +
+                var manifestIndex = manifests.FindIndex(item => item.AppId == updated.UpdatedManifest.AppId);
+                if (manifestIndex >= 0) manifests[manifestIndex] = updated.UpdatedManifest;
+                AppLog.Success($"{updated.UpdatedManifest.Name}（{updated.UpdatedManifest.AppId}）已同步为 BuildID {updated.Write.NewBuildId}，" +
+                               $"StateFlags {updated.UpdatedManifest.StateFlags}" +
                                (updated.Write.BackupPath == null ? "" : $"，备份：{updated.Write.BackupPath}"));
             }
             foreach (var failure in result.Failures) AppLog.Error($"更新失败：{failure}");
@@ -295,16 +299,18 @@ public sealed partial class LibraryPage : Page
     private async Task<bool> ConfirmUpdateAsync(IReadOnlyList<ManifestRow> targets)
     {
         var running = SteamProcess.IsRunning();
-        var message = $"将把 {targets.Count} 个配置的 BuildID 更新为公开分支的最新值：\n" +
-                      string.Join("\n", targets.Take(6).Select(row => $"· {row.Name}（{row.AppId}）→ {row.LatestBuildId}")) +
+        var message = $"将同步 {targets.Count} 个配置到公开分支：\n" +
+                      string.Join("\n", targets.Take(6).Select(row =>
+                          $"· {row.Name}（{row.AppId}）→ BuildID {row.LatestBuildId}")) +
                       (targets.Count > 6 ? $"\n…另有 {targets.Count - 6} 个" : "") +
-                      "\n\n更新前会自动备份原 ACF。";
+                      "\n\n会一并完成：BuildID 同步、Depot Manifest 更新、清除 StateFlags 的“需要更新”标记。" +
+                      "\n更新前会自动备份原 ACF。";
         if (running)
-            message += "\n\n警告：Steam 正在运行。建议先完全退出 Steam，否则客户端可能覆盖本次修改。";
+            message += "\n\n警告：Steam 正在运行。请先完全退出 Steam 再更新，否则客户端会用内存中的旧状态覆盖本次修改。";
 
         var dialog = new ContentDialog
         {
-            Title = running ? "Steam 正在运行，仍要更新吗？" : "确认更新 BuildID",
+            Title = running ? "Steam 正在运行，仍要更新吗？" : "确认同步 Steam 配置",
             Content = new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap },
             PrimaryButtonText = "开始更新",
             CloseButtonText = "取消",

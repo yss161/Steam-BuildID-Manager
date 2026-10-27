@@ -1,3 +1,5 @@
+using System.IO.Compression;
+using System.Text;
 using System.Net;
 using SteamBuildIdManager.Core.Models;
 using SteamBuildIdManager.Core.Services;
@@ -816,6 +818,82 @@ try
 finally
 {
     try { Directory.Delete(Path.GetDirectoryName(sourceSettingsPath)!, recursive: true); } catch { }
+}
+
+// ── SteamCMD installer: paths, extraction and deletion ───────────────────
+var cmdRoot = Path.Combine(Path.GetTempPath(), "sbim-cmd-" + Guid.NewGuid().ToString("N"));
+try
+{
+    var installer = new SteamCmdInstaller(directory: cmdRoot);
+    Check(installer.InstallDirectory == cmdRoot
+        && installer.ExecutablePath == Path.Combine(cmdRoot, "steamcmd.exe"),
+        "steamcmd installer keeps its files inside the requested folder");
+    Check(!installer.IsInstalled, "steamcmd is reported missing before installation");
+
+    // Pre-seed a fake archive so the extraction path is exercised without network access.
+    Directory.CreateDirectory(cmdRoot);
+    var fakeExe = Path.Combine(cmdRoot, "steamcmd.exe");
+    await File.WriteAllBytesAsync(fakeExe, Array.Empty<byte>());
+    Check(installer.IsInstalled, "steamcmd is detected once steamcmd.exe exists");
+
+    installer.Delete();
+    Check(!Directory.Exists(cmdRoot), "deleting steamcmd removes the whole folder");
+}
+finally
+{
+    try { if (Directory.Exists(cmdRoot)) Directory.Delete(cmdRoot, recursive: true); } catch { }
+}
+
+// Full download → extract → delete path against a throwaway loopback HTTP server.
+var servedRoot = Path.Combine(Path.GetTempPath(), "sbim-served-" + Guid.NewGuid().ToString("N"));
+var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+try
+{
+    using var archiveStream = new MemoryStream();
+    using (var zip = new ZipArchive(archiveStream, ZipArchiveMode.Create, leaveOpen: true))
+    {
+        var entry = zip.CreateEntry("steamcmd.exe");
+        using var entryStream = entry.Open();
+        entryStream.WriteByte(0);
+    }
+    var archiveBytes = archiveStream.ToArray();
+
+    listener.Start();
+    var port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+    var servedUrl = new Uri($"http://127.0.0.1:{port}/steamcmd.zip");
+
+    var server = Task.Run(async () =>
+    {
+        using var client = await listener.AcceptTcpClientAsync();
+        using var stream = client.GetStream();
+        var buffer = new byte[4096];
+        var header = new StringBuilder();
+        while (!header.ToString().Contains("\r\n\r\n", StringComparison.Ordinal))
+        {
+            var read = await stream.ReadAsync(buffer);
+            if (read <= 0) break;
+            header.Append(Encoding.ASCII.GetString(buffer, 0, read));
+        }
+
+        var head = $"HTTP/1.1 200 OK\r\nContent-Length: {archiveBytes.Length}\r\nContent-Type: application/zip\r\nConnection: close\r\n\r\n";
+        await stream.WriteAsync(Encoding.ASCII.GetBytes(head));
+        await stream.WriteAsync(archiveBytes);
+        await stream.FlushAsync();
+    });
+
+    var servedInstaller = new SteamCmdInstaller(new HttpClient(), new[] { servedUrl }, servedRoot);
+    var installedPath = await servedInstaller.InstallOrUpdateAsync();
+    await server;
+    Check(File.Exists(installedPath) && servedInstaller.IsInstalled
+        && installedPath == Path.Combine(servedRoot, "steamcmd.exe"),
+        "steamcmd installer downloads, extracts and reports the executable");
+    Check(!File.Exists(Path.Combine(servedRoot, "steamcmd.zip")),
+        "steamcmd installer removes the downloaded archive");
+}
+finally
+{
+    try { listener.Stop(); } catch { }
+    try { if (Directory.Exists(servedRoot)) Directory.Delete(servedRoot, recursive: true); } catch { }
 }
 
 if (args.Contains("--live"))

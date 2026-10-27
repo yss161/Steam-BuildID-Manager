@@ -201,13 +201,20 @@
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
 
                     <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button x:Name="InstallSteamCmdButton" Content="一键安装"
+                                Style="{StaticResource AccentButtonStyle}" Click="InstallSteamCmd_Click"/>
+                        <Button x:Name="UpdateSteamCmdButton" Content="更新" Click="UpdateSteamCmd_Click"/>
+                        <Button x:Name="DeleteSteamCmdButton" Content="删除" Click="DeleteSteamCmd_Click"/>
                         <Button x:Name="TestSteamCmdButton" Content="测试 SteamCMD" Click="TestSteamCmd_Click"/>
-                        <TextBlock x:Name="SteamCmdTestText" FontSize="12" VerticalAlignment="Center"
-                                   TextWrapping="Wrap"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <Button Content="打开目录" Click="OpenSteamCmdFolder_Click"/>
                     </StackPanel>
 
-                    <TextBlock Text="SteamCMD 首次运行会自行更新，单次查询通常需要几秒；设为“优先”时若调用失败会自动回退到在线接口。"
+                    <ProgressBar x:Name="SteamCmdProgress" IsIndeterminate="True" Visibility="Collapsed"/>
+
+                    <TextBlock x:Name="SteamCmdTestText" FontSize="12" TextWrapping="Wrap"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+
+                    <TextBlock Text="“一键安装”会下载 Valve 官方 steamcmd.zip 到本机应用目录，不会修改系统 PATH 或注册表；安装后首次运行仍需联网自更新。"
                                FontSize="12" TextWrapping="Wrap"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                 </StackPanel>

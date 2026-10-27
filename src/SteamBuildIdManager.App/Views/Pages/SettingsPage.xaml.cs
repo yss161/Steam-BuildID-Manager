@@ -100,6 +100,7 @@ public sealed partial class SettingsPage : Page
         SteamCmdStatusText.Text = resolved == null
             ? "未检测到 steamcmd.exe；选择“仅 SteamCMD”时会自动回退到在线接口。"
             : $"已找到：{resolved}";
+        RefreshSteamCmdButtons();
     }
 
     private string SelectedDataSource() =>
@@ -142,7 +143,105 @@ public sealed partial class SettingsPage : Page
         _settings.SteamCmdPath = path;
         SteamCmdPathBox.Text = path;
         SteamCmdStatusText.Text = $"已找到：{path}";
+        RefreshSteamCmdButtons();
         UpdateSaveStatus("已保存 steamcmd.exe 路径。");
+    }
+
+    private void RefreshSteamCmdButtons()
+    {
+        var installed = new SteamCmdInstaller().IsInstalled;
+        UpdateSteamCmdButton.IsEnabled = installed;
+        DeleteSteamCmdButton.IsEnabled = installed;
+    }
+
+    private void SetSteamCmdBusy(bool busy, string message)
+    {
+        InstallSteamCmdButton.IsEnabled = !busy;
+        UpdateSteamCmdButton.IsEnabled = !busy;
+        DeleteSteamCmdButton.IsEnabled = !busy;
+        TestSteamCmdButton.IsEnabled = !busy;
+        SteamCmdProgress.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+        SteamCmdTestText.Text = message;
+    }
+
+    private async void InstallSteamCmd_Click(object sender, RoutedEventArgs e) => await InstallOrUpdateSteamCmdAsync(false);
+
+    private async void UpdateSteamCmd_Click(object sender, RoutedEventArgs e) => await InstallOrUpdateSteamCmdAsync(true);
+
+    private async Task InstallOrUpdateSteamCmdAsync(bool update)
+    {
+        SetSteamCmdBusy(true, update ? "正在更新 SteamCMD…" : "正在下载 SteamCMD…");
+        try
+        {
+            var installer = new SteamCmdInstaller();
+            var progress = new Progress<string>(message => SteamCmdTestText.Text = message);
+            var path = await installer.InstallOrUpdateAsync(progress);
+
+            SaveSteamCmdPath(path);
+            SetSteamCmdBusy(true, "下载完成，正在做首次自更新（可能需要几十秒）…");
+
+            try
+            {
+                var result = await new SteamCmdService(path).TestAsync();
+                SteamCmdTestText.Text = result;
+                AppLog.Info($"SteamCMD 安装完成：{path}；{result}");
+            }
+            catch (Exception ex)
+            {
+                SteamCmdTestText.Text = $"已下载到 {path}，但首次自更新未完成：{ex.Message}";
+                AppLog.Warning($"SteamCMD 首次自更新失败：{ex.Message}");
+            }
+
+            RefreshSteamCmdButtons();
+        }
+        catch (Exception ex)
+        {
+            SteamCmdTestText.Text = "安装失败：" + ex.Message;
+            AppLog.Error("安装 SteamCMD 失败", ex);
+        }
+        finally
+        {
+            SetSteamCmdBusy(false, SteamCmdTestText.Text);
+            RefreshSteamCmdButtons();
+        }
+    }
+
+    private void DeleteSteamCmd_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            new SteamCmdInstaller().Delete();
+            if (string.Equals(SteamCmdPathBox.Text, SteamCmdInstaller.DefaultExecutablePath,
+                    StringComparison.OrdinalIgnoreCase))
+                SaveSteamCmdPath("");
+
+            SteamCmdTestText.Text = "已删除本机的 SteamCMD，将只使用在线接口。";
+            RefreshSteamCmdButtons();
+            LoadDataSource();
+        }
+        catch (Exception ex)
+        {
+            SteamCmdTestText.Text = "删除失败：" + ex.Message;
+            AppLog.Error("删除 SteamCMD 失败", ex);
+        }
+    }
+
+    private void OpenSteamCmdFolder_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var directory = new SteamCmdInstaller().InstallDirectory;
+            Directory.CreateDirectory(directory);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = directory,
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            SteamCmdTestText.Text = "无法打开目录：" + ex.Message;
+        }
     }
 
     private async void TestSteamCmd_Click(object sender, RoutedEventArgs e)
@@ -278,13 +377,19 @@ public sealed partial class SettingsPage : Page
 
     private void RestartElevated()
     {
-        if (!ElevationService.TryRestartElevated())
+        // Release the single-instance lock first, otherwise the elevated copy exits immediately
+        // because it still sees this window and only re-activates it.
+        Program.ReleaseSingleInstanceMutex();
+
+        if (!ElevationService.TryRestartElevated("--elevated"))
         {
+            Program.ReacquireSingleInstanceMutex();
             ShowInfo("提权失败", "未能以管理员身份重启，可能取消了 UAC 提示。当前仍以标准权限运行。",
                 InfoBarSeverity.Warning);
             return;
         }
 
+        AppLog.Info("已请求以管理员身份重启。");
         Application.Current.Exit();
     }
 

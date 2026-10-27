@@ -3,7 +3,7 @@
 ; The publish folder must exist first (see README).
 
 #define MyAppName "Steam BuildID 管理器"
-#define MyAppVersion "1.5.0"
+#define MyAppVersion "1.6.0"
 #define MyAppPublisher "yss161"
 #define MyAppURL "https://github.com/yss161/Steam-BuildID-Manager"
 #define MyAppExeName "SteamBuildIDManager.exe"
@@ -37,7 +37,7 @@ CloseApplications=yes
 CloseApplicationsFilter=SteamBuildIDManager.exe
 RestartApplications=no
 LicenseFile=..\LICENSE
-VersionInfoVersion=1.5.0.0
+VersionInfoVersion=1.6.0.0
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription={#MyAppName} 安装程序
 VersionInfoProductName={#MyAppName}
@@ -59,4 +59,8 @@ Name: "{autoprograms}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstall
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
+; Remove the "downloaded from the internet" marker so SmartScreen stops warning about the app.
+; This only touches the installed files, never a system-wide security setting.
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command ""Get-ChildItem -LiteralPath '{app}' -Recurse -File -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue"""; Flags: runhidden waituntilterminated; StatusMsg: "正在解除文件锁定…"
+
 Filename: "{app}\{#MyAppExeName}"; Description: "启动 {#MyAppName}"; Flags: nowait postinstall skipifsilent

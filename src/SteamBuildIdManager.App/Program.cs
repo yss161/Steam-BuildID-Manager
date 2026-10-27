@@ -34,7 +34,7 @@ internal static class Program
             }
         }
 
-        _singleInstanceMutex = new Mutex(true, @"Local\SteamBuildIDManager_SingleInstance", out var isFirstInstance);
+        _singleInstanceMutex = new Mutex(true, SingleInstanceName, out var isFirstInstance);
         if (!isFirstInstance)
         {
             var handle = FindWindow(null, AppInfo.WindowTitle);
@@ -109,6 +109,35 @@ internal static class Program
     }
 
     private const string NoElevateArgument = "--no-elevate";
+
+    private const string SingleInstanceName = @"Local\SteamBuildIDManager_SingleInstance";
+
+    /// <summary>
+    /// Hand the single-instance lock over before starting an elevated copy. Without this the new
+    /// elevated process finds the mutex still held, activates the old window and exits, which made
+    /// the "restart as administrator" button appear to do nothing.
+    /// </summary>
+    internal static void ReleaseSingleInstanceMutex()
+    {
+        try
+        {
+            _singleInstanceMutex?.ReleaseMutex();
+        }
+        catch
+        {
+            // Not the owner, or already released.
+        }
+
+        _singleInstanceMutex?.Dispose();
+        _singleInstanceMutex = null;
+    }
+
+    /// <summary>Re-take the lock when the elevation prompt was cancelled and this process keeps running.</summary>
+    internal static void ReacquireSingleInstanceMutex()
+    {
+        if (_singleInstanceMutex != null) return;
+        _singleInstanceMutex = new Mutex(true, SingleInstanceName, out _);
+    }
 
     internal static void WriteCrashLog(string source, Exception? exception)
     {

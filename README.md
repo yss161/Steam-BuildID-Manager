@@ -11,17 +11,18 @@
 ## 功能
 
 1. **扫描 Steam 库**：自动读取 `steamapps\appmanifest_*.acf`，显示游戏名称、AppID、当前 BuildID、安装目录和库位置。
-2. **BuildID 更新检测**：从 SteamCMD 公开信息接口读取 `public` 分支，同时比较 `buildid`、每个 Depot 的 `manifest` 和 `StateFlags` 更新标志，标记“已是最新 / 发现更新 / 检测失败”。
-3. **一键更新 BuildID**：支持单个更新和全部更新。同步 `buildid`、清空 `TargetBuildID`、刷新每个 Depot 的 `manifest`、清除 `StateFlags` 的“需要更新”标志，其余字段、缩进和换行符保持不变，更新后 Steam 不再提示更新。
-4. **自动备份**：每次写入前把原 ACF 备份到 `%LocalAppData%\SteamBuildIDManager\backups\<AppID>\`，默认保留最近 5 份。
-5. **新建 / 重建配置**：填写 AppID 后自动获取名称、安装目录、BuildID、Depot、启动 EXE 候选和 Steam 占位文件名，创建空占位 EXE 并写入 ACF，同时生成可粘贴到 Steam 启动选项的命令。
-6. **Steam 路径探测**：读取注册表和 `libraryfolders.vdf`，自动发现 Steam 安装目录和所有库文件夹，也支持手动添加。
-7. **本地账号读取**：从 `config\loginusers.vdf` 读取本机登录过的账号，按 `MostRecent` / `AutoLogin` / 时间排序，自动填充当前账号的 SteamID64；多账号时可弹窗选择，文件缺失时从 `userdata` 的 SteamID32 换算。
-8. **外观设置**：主题支持跟随系统 / 浅色 / 深色；可选择本地图片作为窗口背景，并调整 10%–100% 不透明度。
-9. **管理员启动**：设置页可开启“以管理员身份启动”，每次启动自动请求 UAC 提权，也可一键以管理员重启。
-10. **获取游戏信息**：输入 AppID 即可查看显示名称、安装目录名、BuildID、主 DepotID、主 Manifest、Steam 占位文件名、启动 EXE 和全部 Depot；确认后可一键「创建为新配置」直接生成 ACF 与占位文件。
-11. **运行日志**：页面底部实时显示扫描、检测、更新和网络请求过程，可清空或打开日志文件；日志同时写入 `%LocalAppData%\SteamBuildIDManager\logs\app.log`。
-12. **安全保护**：默认只列出 `SizeOnDisk = 0` 的占位配置；Steam 正在运行时给出警告；检测到 ACF 已被其他程序修改时拒绝覆盖。
+2. **BuildID 更新检测**：可从在线接口（`api.steamcmd.net`）或本地 SteamCMD 读取 `public` 分支，同时比较 `buildid`、每个 Depot 的 `manifest` 和 `StateFlags` 更新标志，标记“已是最新 / 发现更新 / 检测失败”。
+3. **多数据源**：设置页可选择“优先 SteamCMD / 优先在线接口 / 仅在线接口 / 仅 SteamCMD”，自动检测 `steamcmd.exe`，并提供一键测试；某个来源失败会自动回退，且 5 分钟内不再重试，避免整轮扫描被拖慢。
+4. **一键更新 BuildID**：支持单个更新和全部更新。同步 `buildid`、清空 `TargetBuildID`、刷新每个 Depot 的 `manifest`、清除 `StateFlags` 的“需要更新”标志，其余字段、缩进和换行符保持不变，更新后 Steam 不再提示更新。
+5. **自动备份**：每次写入前把原 ACF 备份到 `%LocalAppData%\SteamBuildIDManager\backups\<AppID>\`，默认保留最近 5 份。
+6. **新建 / 重建配置**：填写 AppID 后自动获取名称、安装目录、BuildID、Depot、启动 EXE 候选和 Steam 占位文件名，创建空占位 EXE 并写入 ACF，同时生成可粘贴到 Steam 启动选项的命令。
+7. **Steam 路径探测**：读取注册表和 `libraryfolders.vdf`，自动发现 Steam 安装目录和所有库文件夹，也支持手动添加。
+8. **本地账号读取**：从 `config\loginusers.vdf` 读取本机登录过的账号，按 `MostRecent` / `AutoLogin` / 时间排序，自动填充当前账号的 SteamID64；多账号时可弹窗选择，文件缺失时从 `userdata` 的 SteamID32 换算。
+9. **外观设置**：主题支持跟随系统 / 浅色 / 深色；可选择本地图片作为窗口背景，并调整 10%–100% 不透明度。
+10. **管理员启动**：设置页可开启“以管理员身份启动”，每次启动自动请求 UAC 提权，也可一键以管理员重启。
+11. **获取游戏信息**：输入 AppID 即可查看显示名称、安装目录名、BuildID、主 DepotID、主 Manifest、Steam 占位文件名、启动 EXE 和全部 Depot；确认后可一键「创建为新配置」直接生成 ACF 与占位文件。
+12. **运行日志**：页面底部实时显示扫描、检测、更新和网络请求过程，可清空或打开日志文件；日志同时写入 `%LocalAppData%\SteamBuildIDManager\logs\app.log`。
+13. **安全保护**：默认只列出 `SizeOnDisk = 0` 的占位配置；Steam 正在运行时给出警告；检测到 ACF 已被其他程序修改时拒绝覆盖。
 
 ## 界面与使用流程
 
@@ -55,21 +56,21 @@ BuildIdUpdateService ──► api.steamcmd.net/v1/info/<AppID> ──► public
 
 仓库自带 [GitHub Actions 工作流](.github/workflows/build.yml)：
 
-1. 每次推送或提交 Pull Request 时，自动运行 117 项核心回归测试。
+1. 每次推送或提交 Pull Request 时，自动运行 129 项核心回归测试。
 2. 测试通过后，在 `windows-latest` 上以 `win-x64` 自包含方式发布 WinUI 3 应用。
 3. 用 Inno Setup 生成需要管理员权限的全机安装包，并在 CI 中执行静默安装、启动文件检查和静默卸载冒烟测试。
-4. 便携版 `Steam-BuildID-Manager-win-x64.zip` 和安装版 `Steam-BuildID-Manager-Setup-1.4.0.exe` 都会上传到 Actions Artifacts。
+4. 便携版 `Steam-BuildID-Manager-win-x64.zip` 和安装版 `Steam-BuildID-Manager-Setup-1.5.0.exe` 都会上传到 Actions Artifacts。
 5. 推送 `v*` 标签时，两个产物会自动附加到 GitHub Release。
 
 下载方式：
 
-1. **安装版**：从 [Releases](https://github.com/yss161/Steam-BuildID-Manager/releases) 下载 `Steam-BuildID-Manager-Setup-1.4.0.exe`。
+1. **安装版**：从 [Releases](https://github.com/yss161/Steam-BuildID-Manager/releases) 下载 `Steam-BuildID-Manager-Setup-1.5.0.exe`。
 2. **便携版**：从 Releases 下载 `Steam-BuildID-Manager-win-x64.zip`，解压后直接运行。
 3. **最新构建**：打开 [Actions](https://github.com/yss161/Steam-BuildID-Manager/actions/workflows/build.yml)，选择最近一次成功的 `build`，在页面底部下载安装版或便携版。
 
 ## 安装版
 
-1. 双击 `Steam-BuildID-Manager-Setup-1.4.0.exe`，安装程序会自动请求管理员权限，在 UAC 提示中选择“是”即可。
+1. 双击 `Steam-BuildID-Manager-Setup-1.5.0.exe`，安装程序会自动请求管理员权限，在 UAC 提示中选择“是”即可。
 2. 默认安装到 `C:\Program Files\SteamBuildIDManager`；开始菜单快捷方式对所有用户可见，桌面快捷方式默认不勾选。
 3. 安装程序会检测并关闭正在运行的旧版本，安装完成后可直接启动。
 4. 卸载需要管理员权限，入口在 Windows“设置 → 应用 → 已安装的应用”，不会删除用户设置和 ACF 备份。

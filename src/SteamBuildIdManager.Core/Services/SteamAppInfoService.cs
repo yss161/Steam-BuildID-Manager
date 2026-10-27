@@ -10,9 +10,18 @@ public interface ISteamAppInfoService
     Task<SteamAppInfo> GetAppInfoAsync(string appId, CancellationToken cancellationToken = default);
 }
 
-public sealed class SteamAppInfoException : Exception
+public class SteamAppInfoException : Exception
 {
     public SteamAppInfoException(string message, Exception? inner = null) : base(message, inner) { }
+}
+
+/// <summary>
+/// The source worked but has no metadata for this AppID (private, delisted or region-locked).
+/// This must not disable the source for other apps the way a network failure does.
+/// </summary>
+public sealed class SteamAppInfoNotFoundException : SteamAppInfoException
+{
+    public SteamAppInfoNotFoundException(string message) : base(message) { }
 }
 
 /// <summary>Transport only; HttpClient and endpoint can be replaced without changing parsing or UI.</summary>
@@ -49,7 +58,7 @@ public sealed class SteamAppInfoService : ISteamAppInfoService
             request.Headers.UserAgent.ParseAdd("Steam-BuildID-Manager");
             using var response = await _client.SendAsync(request, cancellationToken).ConfigureAwait(false);
             if (response.StatusCode == HttpStatusCode.NotFound)
-                throw new SteamAppInfoException("未找到该 AppID 的公开信息，请检查 AppID。");
+                throw new SteamAppInfoNotFoundException("未找到该 AppID 的公开信息，请检查 AppID。");
             response.EnsureSuccessStatusCode();
             var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             return SteamAppInfoParser.Parse(json, normalizedId);
@@ -80,7 +89,7 @@ public static class SteamAppInfoParser
             throw new SteamAppInfoException("服务未返回该 AppID 的有效信息，请检查 AppID 或稍后重试。");
         var app = Child(Child(root, "data"), appId);
         if (app.ValueKind != JsonValueKind.Object || !app.EnumerateObject().Any())
-            throw new SteamAppInfoException("该 AppID 暂无可用的公开配置。");
+            throw new SteamAppInfoNotFoundException("该 AppID 暂无可用的公开配置。");
 
         var common = Child(app, "common");
         var config = Child(app, "config");

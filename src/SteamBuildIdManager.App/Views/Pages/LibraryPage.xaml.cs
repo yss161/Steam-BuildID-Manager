@@ -14,7 +14,7 @@ namespace SteamBuildIdManager.Views.Pages;
 public sealed partial class LibraryPage : Page
 {
     private readonly SettingsService _settingsService = new();
-    private readonly BuildIdUpdateService _updateService = new(new SteamBuildIdProvider());
+    private BuildIdUpdateService _updateService = new(new SteamBuildIdProvider());
     private readonly ObservableCollection<ManifestRow> _rows = new();
     private readonly DispatcherQueue _dispatcher = DispatcherQueue.GetForCurrentThread();
     private readonly List<LogEntry> _logEntries = new();
@@ -94,6 +94,7 @@ public sealed partial class LibraryPage : Page
         if (_busy) return;
 
         _settings = _settingsService.Load();
+        _updateService = CreateUpdateService(_settings);
         _suppressToggle = true;
         ShowAllToggle.IsOn = _settings.ShowAllSteamGames;
         _suppressToggle = false;
@@ -143,6 +144,49 @@ public sealed partial class LibraryPage : Page
         UpdateSummary();
         if (autoCheck && _rows.Count > 0 && _rows.Any(row => row.State == BuildIdState.Unknown))
             await RunCheckAsync(forceRefresh: false, onlyUnknown: true);
+    }
+
+    /// <summary>
+    /// Compose the provider chain from settings. SteamCMD is only added when steamcmd.exe can be
+    /// located, so a missing install quietly degrades to the HTTP source instead of failing scans.
+    /// </summary>
+    private static BuildIdUpdateService CreateUpdateService(AppSettings settings)
+    {
+        var mode = DataSourceModes.Normalize(settings.DataSource);
+        var api = new SteamBuildIdProvider();
+        if (mode == DataSourceModes.ApiOnly) return new BuildIdUpdateService(api);
+
+        var steamCmdPath = SteamCmdLocator.Resolve(settings.SteamCmdPath, settings.SteamInstallPath);
+        var sources = new List<(string Name, IBuildIdProvider Provider)>();
+        (string Name, IBuildIdProvider Provider)? steamCmd = steamCmdPath == null
+            ? null
+            : ("SteamCMD", (IBuildIdProvider)new SteamCmdBuildIdProvider(new SteamCmdService(steamCmdPath)));
+
+        if (mode == DataSourceModes.SteamCmdOnly)
+        {
+            if (steamCmd == null)
+            {
+                AppLog.Warning("已选择仅 SteamCMD，但未找到 steamcmd.exe，本次回退到在线接口。");
+                return new BuildIdUpdateService(api);
+            }
+            return new BuildIdUpdateService(new CompositeBuildIdProvider(new[] { steamCmd.Value }));
+        }
+
+        if (steamCmdPath != null && mode == DataSourceModes.SteamCmdFirst)
+        {
+            AppLog.Info($"数据源：优先 SteamCMD（{steamCmdPath}），失败时回退到 api.steamcmd.net。");
+            sources.Add(steamCmd!.Value);
+            sources.Add(("api.steamcmd.net", api));
+        }
+        else
+        {
+            if (steamCmdPath == null) AppLog.Info("未找到 steamcmd.exe，本次只使用 api.steamcmd.net。");
+            else AppLog.Info("数据源：优先 api.steamcmd.net，失败时回退到 SteamCMD。");
+            sources.Add(("api.steamcmd.net", api));
+            if (steamCmd != null) sources.Add(steamCmd.Value);
+        }
+
+        return new BuildIdUpdateService(new CompositeBuildIdProvider(sources));
     }
 
     private IReadOnlyList<string> ResolveLibraryRoots(AppSettings settings)

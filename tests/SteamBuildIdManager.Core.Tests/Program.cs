@@ -667,6 +667,157 @@ Check(logged[0].DisplayText.Contains("信息", StringComparison.Ordinal)
 AppLog.Clear();
 Check(AppLog.Snapshot().Count == 0, "log buffer can be cleared");
 
+// ── Data sources: VDF parsing, SteamCMD output and fallback ──────────────
+const string steamCmdOutput = """
+AppID : 4706890, change number : 40242982/40242982, last change : Tue Oct 20 23:00:00 2026
+"4706890"
+{
+	"appid"		"4706890"
+	"common"
+	{
+		"name"		"異環"
+		"type"		"Game"
+	}
+	"config"
+	{
+		"installdir"		"異環"
+		"launch"
+		{
+			"0"
+			{
+				"executable"		"NTETW\\NTETWLauncher.exe"
+				"description"		"启动"
+				"config"		{ "oslist"		"windows" }
+			}
+		}
+	}
+	"depots"
+	{
+		"branches"
+		{
+			"public"
+			{
+				"buildid"		"26236512"
+				"timebuildupdated"		"1793082080"
+			}
+		}
+		"4706891"
+		{
+			"name"		"異環 Content"
+			"config"		{ "oslist"		"windows" "osarch"		"64" }
+			"manifests"
+			{
+				"public"
+				{
+					"gid"		"5084594620537324499"
+					"size"		"91537146561"
+				}
+			}
+		}
+		"4706892"
+		{
+			"config"		{ "language"		"schinese" }
+			"manifests"		{ "public"		"123456789" }
+		}
+	}
+}
+""";
+
+var vdfRoot = VdfDocument.TryParseBlock(steamCmdOutput[steamCmdOutput.IndexOf('{')..]);
+Check(vdfRoot != null && vdfRoot["common"]?.Get("name") == "異環",
+    "VDF parser reads nested blocks and values");
+
+var steamCmdInfo = SteamCmdAppInfoParser.Parse(steamCmdOutput, "4706890");
+Check(steamCmdInfo.Name == "異環" && steamCmdInfo.InstallDirectory == "異環",
+    "SteamCMD parser reads name and install directory");
+Check(steamCmdInfo.BranchBuildIds.TryGetValue("public", out var cmdBuild) && cmdBuild == "26236512",
+    "SteamCMD parser reads the public buildid");
+Check(steamCmdInfo.Depots.Count == 2
+    && steamCmdInfo.Depots[0].Manifests["public"] == "5084594620537324499"
+    && steamCmdInfo.Depots[1].Manifests["public"] == "123456789",
+    "SteamCMD parser reads depot manifests in both block and scalar form");
+Check(steamCmdInfo.LaunchOptions.Count == 1
+    && steamCmdInfo.LaunchOptions[0].Executable == @"NTETW\NTETWLauncher.exe",
+    "SteamCMD parser reads launch options");
+
+var cmdProvider = new SteamCmdBuildIdProvider(new SteamCmdService(@"C:\does-not-exist\steamcmd.exe"));
+try
+{
+    await cmdProvider.GetLatestBuildAsync("4706890");
+    throw new Exception("FAILED: missing steamcmd accepted");
+}
+catch (SteamAppInfoException ex)
+{
+    Check(ex.Message.Contains("SteamCMD", StringComparison.Ordinal),
+        "missing steamcmd.exe produces a clear error");
+}
+
+var failingSource = new ThrowingBuildIdProvider("接口超时");
+var workingSource = new StubPublicBuildProvider("777", new Dictionary<string, string> { ["101"] = "888" });
+var composite = new CompositeBuildIdProvider(new[]
+{
+    ("SteamCMD", (IBuildIdProvider)failingSource),
+    ("api.steamcmd.net", (IBuildIdProvider)workingSource),
+});
+var compositeResult = await composite.GetLatestBuildAsync("100");
+Check(compositeResult?.BuildId == "777" && composite.SourceFor("100") == "api.steamcmd.net",
+    "composite provider falls back to the next source and records it");
+
+var allFail = new CompositeBuildIdProvider(new[] { ("SteamCMD", (IBuildIdProvider)failingSource) });
+try
+{
+    await allFail.GetLatestBuildAsync("100");
+    throw new Exception("FAILED: all-failing composite returned a value");
+}
+catch (SteamAppInfoException ex)
+{
+    Check(ex.Message.Contains("SteamCMD", StringComparison.Ordinal),
+        "composite provider reports which sources failed");
+}
+
+Check(DataSourceModes.Normalize("STEAMCMD-ONLY") == DataSourceModes.SteamCmdOnly
+    && DataSourceModes.Normalize("nonsense") == DataSourceModes.SteamCmdFirst
+    && DataSourceModes.DisplayName(DataSourceModes.ApiOnly) == "仅在线接口",
+    "data source modes normalise and localise");
+
+// A source that simply lacks this AppID must stay usable for the next one.
+var notFoundSource = new CountingProvider(throwNotFound: true);
+var notFoundComposite = new CompositeBuildIdProvider(new[]
+{
+    ("SteamCMD", (IBuildIdProvider)notFoundSource),
+    ("api.steamcmd.net", (IBuildIdProvider)new StubPublicBuildProvider("42", new Dictionary<string, string>())),
+});
+await notFoundComposite.GetLatestBuildAsync("100");
+await notFoundComposite.GetLatestBuildAsync("200");
+Check(notFoundSource.Calls == 2 && notFoundComposite.SourceFor("200") == "api.steamcmd.net",
+    "a missing AppID does not disable the source for other apps");
+
+// A broken source is skipped for a while instead of timing out on every app.
+var brokenSource = new CountingProvider(throwNotFound: false);
+var cooldownComposite = new CompositeBuildIdProvider(new[]
+{
+    ("SteamCMD", (IBuildIdProvider)brokenSource),
+    ("api.steamcmd.net", (IBuildIdProvider)new StubPublicBuildProvider("42", new Dictionary<string, string>())),
+});
+await cooldownComposite.GetLatestBuildAsync("100");
+await cooldownComposite.GetLatestBuildAsync("200");
+Check(brokenSource.Calls == 1, "a failing source is skipped during its cooldown window");
+
+var sourceSettingsPath = Path.Combine(Path.GetTempPath(), "sbim-source-" + Guid.NewGuid().ToString("N"), "settings.json");
+try
+{
+    var sourceSettings = new SettingsService(sourceSettingsPath);
+    sourceSettings.Save(new AppSettings { DataSource = "api-first", SteamCmdPath = @"C:\steamcmd\steamcmd.exe" });
+    var reloaded = sourceSettings.Load();
+    Check(reloaded.NormalizedDataSource == DataSourceModes.ApiFirst
+        && reloaded.SteamCmdPath.EndsWith("steamcmd.exe", StringComparison.OrdinalIgnoreCase),
+        "data source settings round-trip");
+}
+finally
+{
+    try { Directory.Delete(Path.GetDirectoryName(sourceSettingsPath)!, recursive: true); } catch { }
+}
+
 if (args.Contains("--live"))
 {
     var live = await new SteamAppInfoService().GetAppInfoAsync("4162040");
@@ -695,6 +846,35 @@ sealed class FakeBuildIdProvider(IReadOnlyDictionary<string, string> values) : I
         lock (Calls) Calls.Add(appId);
         return Task.FromResult(values.TryGetValue(appId, out var value) ? value : null);
     }
+}
+
+sealed class CountingProvider(bool throwNotFound) : IBuildIdProvider
+{
+    public int Calls { get; private set; }
+
+    public Task<string?> GetLatestBuildIdAsync(string appId, bool forceRefresh = false,
+        CancellationToken cancellationToken = default) =>
+        throw Create();
+
+    public Task<SteamPublicBuild?> GetLatestBuildAsync(string appId, bool forceRefresh = false,
+        CancellationToken cancellationToken = default)
+    {
+        Calls++;
+        throw Create();
+    }
+
+    private Exception Create() => throwNotFound
+        ? new SteamAppInfoNotFoundException("该 AppID 暂无可用的公开配置。")
+        : new SteamAppInfoException("模拟的接口故障");
+}
+
+sealed class ThrowingBuildIdProvider(string message) : IBuildIdProvider
+{
+    public Task<string?> GetLatestBuildIdAsync(string appId, bool forceRefresh = false,
+        CancellationToken cancellationToken = default) => throw new SteamAppInfoException(message);
+
+    public Task<SteamPublicBuild?> GetLatestBuildAsync(string appId, bool forceRefresh = false,
+        CancellationToken cancellationToken = default) => throw new SteamAppInfoException(message);
 }
 
 sealed class StubPublicBuildProvider(string buildId, IReadOnlyDictionary<string, string> manifests)

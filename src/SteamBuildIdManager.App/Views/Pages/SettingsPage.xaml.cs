@@ -76,10 +76,102 @@ public sealed partial class SettingsPage : Page
 
             RunAsAdminToggle.IsOn = _settings.RunAsAdministrator;
             RefreshElevationStatus();
+            LoadDataSource();
         }
         finally
         {
             _suppressAppearanceEvents = false;
+        }
+    }
+
+    private void LoadDataSource()
+    {
+        var mode = DataSourceModes.Normalize(_settings.DataSource);
+        DataSourceCombo.SelectedIndex = mode switch
+        {
+            DataSourceModes.ApiFirst => 1,
+            DataSourceModes.ApiOnly => 2,
+            DataSourceModes.SteamCmdOnly => 3,
+            _ => 0,
+        };
+
+        SteamCmdPathBox.Text = _settings.SteamCmdPath;
+        var resolved = SteamCmdLocator.Resolve(_settings.SteamCmdPath, _settings.SteamInstallPath);
+        SteamCmdStatusText.Text = resolved == null
+            ? "未检测到 steamcmd.exe；选择“仅 SteamCMD”时会自动回退到在线接口。"
+            : $"已找到：{resolved}";
+    }
+
+    private string SelectedDataSource() =>
+        (DataSourceCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? DataSourceModes.SteamCmdFirst;
+
+    private void DataSourceCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressAppearanceEvents) return;
+        var mode = SelectedDataSource();
+        _settingsService.Update(settings => settings.DataSource = mode);
+        _settings.DataSource = mode;
+        UpdateSaveStatus($"数据来源已切换为“{DataSourceModes.DisplayName(mode)}”。");
+    }
+
+    private async void BrowseSteamCmd_Click(object sender, RoutedEventArgs e)
+    {
+        var path = await Services.PickerHelper.PickExecutableAsync();
+        if (string.IsNullOrWhiteSpace(path)) return;
+        SaveSteamCmdPath(path);
+    }
+
+    private void DetectSteamCmd_Click(object sender, RoutedEventArgs e)
+    {
+        var resolved = SteamCmdLocator.Resolve(_settings.SteamCmdPath, _settings.SteamInstallPath);
+        if (resolved == null)
+        {
+            SteamCmdStatusText.Text = "未检测到 steamcmd.exe，请手动选择或改用“仅在线接口”。";
+            ShowInfo("未检测到 SteamCMD",
+                "可从 Valve 下载 steamcmd.zip 解压后，点击“浏览”指定 steamcmd.exe。",
+                InfoBarSeverity.Warning);
+            return;
+        }
+
+        SaveSteamCmdPath(resolved);
+    }
+
+    private void SaveSteamCmdPath(string path)
+    {
+        _settingsService.Update(settings => settings.SteamCmdPath = path);
+        _settings.SteamCmdPath = path;
+        SteamCmdPathBox.Text = path;
+        SteamCmdStatusText.Text = $"已找到：{path}";
+        UpdateSaveStatus("已保存 steamcmd.exe 路径。");
+    }
+
+    private async void TestSteamCmd_Click(object sender, RoutedEventArgs e)
+    {
+        var path = SteamCmdLocator.Resolve(
+            string.IsNullOrWhiteSpace(SteamCmdPathBox.Text) ? _settings.SteamCmdPath : SteamCmdPathBox.Text,
+            _settings.SteamInstallPath);
+        if (path == null)
+        {
+            SteamCmdTestText.Text = "未找到 steamcmd.exe。";
+            return;
+        }
+
+        TestSteamCmdButton.IsEnabled = false;
+        SteamCmdTestText.Text = "正在测试，首次运行需要联网自更新，可能需要几十秒…";
+        try
+        {
+            var message = await new SteamCmdService(path).TestAsync();
+            SteamCmdTestText.Text = message;
+            AppLog.Info($"SteamCMD 测试结果：{message}");
+        }
+        catch (Exception ex)
+        {
+            SteamCmdTestText.Text = "测试失败：" + ex.Message;
+            AppLog.Warning($"SteamCMD 测试失败：{ex.Message}");
+        }
+        finally
+        {
+            TestSteamCmdButton.IsEnabled = true;
         }
     }
 

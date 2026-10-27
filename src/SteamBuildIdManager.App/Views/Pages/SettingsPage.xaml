@@ -163,6 +163,60 @@
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1" CornerRadius="8" Padding="18">
                 <StackPanel Spacing="12">
+                    <TextBlock Text="数据来源" FontSize="16" FontWeight="SemiBold"/>
+
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="取值顺序" FontSize="14"/>
+                            <TextBlock Text="SteamCMD 读取的是 Steam 官方 PICS 数据，比第三方镜像更新；在线接口无需额外安装。"
+                                       FontSize="12" TextWrapping="Wrap"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+                        <ComboBox x:Name="DataSourceCombo" Grid.Column="1" MinWidth="170" VerticalAlignment="Center"
+                                  SelectionChanged="DataSourceCombo_SelectionChanged">
+                            <ComboBoxItem Content="优先 SteamCMD" Tag="steamcmd-first"/>
+                            <ComboBoxItem Content="优先在线接口" Tag="api-first"/>
+                            <ComboBoxItem Content="仅在线接口" Tag="api-only"/>
+                            <ComboBoxItem Content="仅 SteamCMD" Tag="steamcmd-only"/>
+                        </ComboBox>
+                    </Grid>
+
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="SteamCmdPathBox" Header="steamcmd.exe 路径"
+                                 PlaceholderText="留空自动检测，例如 C:\steamcmd\steamcmd.exe"/>
+                        <Button Grid.Column="1" Content="浏览" VerticalAlignment="Bottom" Click="BrowseSteamCmd_Click"/>
+                        <Button Grid.Column="2" Content="自动检测" VerticalAlignment="Bottom" Click="DetectSteamCmd_Click"/>
+                    </Grid>
+
+                    <TextBlock x:Name="SteamCmdStatusText" FontSize="12" TextWrapping="Wrap"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button x:Name="TestSteamCmdButton" Content="测试 SteamCMD" Click="TestSteamCmd_Click"/>
+                        <TextBlock x:Name="SteamCmdTestText" FontSize="12" VerticalAlignment="Center"
+                                   TextWrapping="Wrap"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    </StackPanel>
+
+                    <TextBlock Text="SteamCMD 首次运行会自行更新，单次查询通常需要几秒；设为“优先”时若调用失败会自动回退到在线接口。"
+                               FontSize="12" TextWrapping="Wrap"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+            </Border>
+
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="18">
+                <StackPanel Spacing="12">
                     <TextBlock Text="启动方式" FontSize="16" FontWeight="SemiBold"/>
 
                     <Grid ColumnSpacing="12">

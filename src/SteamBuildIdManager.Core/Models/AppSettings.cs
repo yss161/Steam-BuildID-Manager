@@ -1,6 +1,7 @@
 namespace SteamBuildIdManager.Core.Models;
 
 using System.Text.Json.Serialization;
+using SteamBuildIdManager.Core.Services;
 
 /// <summary>Persisted application settings. Unknown JSON fields are ignored for forward compatibility.</summary>
 public sealed class AppSettings
@@ -22,6 +23,15 @@ public sealed class AppSettings
 
     /// <summary>When true the app requests elevation on startup and restarts itself as administrator.</summary>
     public bool RunAsAdministrator { get; set; }
+
+    /// <summary>Which data source chain to use: SteamCMD first, API first, or a single source.</summary>
+    public string DataSource { get; set; } = "steamcmd-first";
+
+    /// <summary>Optional explicit path to steamcmd.exe; empty means auto-detect.</summary>
+    public string SteamCmdPath { get; set; } = "";
+
+    [JsonIgnore]
+    public string NormalizedDataSource => DataSourceModes.Normalize(DataSource);
 
     [JsonIgnore]
     public string NormalizedThemeMode => ThemeModes.Normalize(ThemeMode);

@@ -98,7 +98,23 @@ Check(synced.Contains("\"LauncherPath\"\t\t\"C:\\\\Steam\\\\steam.exe\"")
 var updateRequired = sampleAcf.Replace("\"StateFlags\"\t\t\"4\"", "\"StateFlags\"\t\t\"6\"");
 var clearedFlags = AcfDocument.WithBuildIdAndDepots(updateRequired, "222", null);
 Check(clearedFlags.Contains("\"StateFlags\"\t\t\"4\""),
-    "sync clears the update-required StateFlags bit");
+    "sync resets StateFlags to the fully-installed value");
+
+// A paused/queued transfer (StateFlags 518, DownloadType 4, pending bytes, target build)
+// is exactly what made Steam resume and overwrite the manifest on the next client start.
+var pausedUpdate = sampleAcf
+    .Replace("\"StateFlags\"\t\t\"4\"", "\"StateFlags\"\t\t\"518\"")
+    .Replace("\"TargetBuildID\"\t\t\"999\"", "\"TargetBuildID\"\t\t\"26236512\"")
+    .Replace("\"SizeOnDisk\"\t\t\"0\"",
+        "\"SizeOnDisk\"\t\t\"0\"\r\n\t\"DownloadType\"\t\t\"4\"\r\n\t\"BytesToDownload\"\t\t\"2959529119\"\r\n\t\"BytesDownloaded\"\t\t\"0\"");
+var repaired = AcfDocument.WithBuildIdAndDepots(pausedUpdate, "222", null);
+var repairedManifest = AcfDocument.Parse("appmanifest_100.acf", "", repaired);
+Check(repairedManifest.StateFlags == "4" && repairedManifest.TargetBuildId == "0"
+    && repairedManifest.PendingBytes == 0 && repairedManifest.DownloadType == "1"
+    && !repairedManifest.NeedsStateRepair,
+    "sync clears a paused download: StateFlags 4, no target build and no pending bytes");
+Check(repaired.Contains("\"BytesStaged\"\t\t\"0\"") || !repaired.Contains("BytesStaged"),
+    "sync leaves download counters at zero");
 
 // ── Depot drift detection through the update service ─────────────────────
 var driftRoot = Path.Combine(Path.GetTempPath(), "sbim-drift-" + Guid.NewGuid().ToString("N"));
@@ -107,6 +123,8 @@ try
     var driftLibrary = Path.Combine(driftRoot, "lib");
     var driftSteamApps = Path.Combine(driftLibrary, "steamapps");
     Directory.CreateDirectory(driftSteamApps);
+    // A healthy manifest: installed, no queued target, no pending download.
+    var healthyAcf = sampleAcf.Replace("\"TargetBuildID\"\t\t\"999\"", "\"TargetBuildID\"\t\t\"0\"");
     await File.WriteAllTextAsync(Path.Combine(driftSteamApps, "appmanifest_100.acf"), sampleAcf);
 
     var driftProvider = new StubPublicBuildProvider("111", new Dictionary<string, string>
@@ -135,7 +153,9 @@ try
     });
     var matchedService = new BuildIdUpdateService(matchedProvider,
         new ManifestFileService(Path.Combine(driftRoot, "backups2")));
-    var matchedCheck = (await matchedService.CheckAsync(new[] { driftScan })).Single();
+    await File.WriteAllTextAsync(Path.Combine(driftSteamApps, "appmanifest_100.acf"), healthyAcf);
+    var healthyScan = matchedService.Scan(new[] { driftLibrary }).Manifests.Single();
+    var matchedCheck = (await matchedService.CheckAsync(new[] { healthyScan })).Single();
     Check(matchedCheck.State == BuildIdState.UpToDate && !matchedCheck.HasDepotDrift,
         "matching depot manifests keep the entry up to date");
 
@@ -369,10 +389,12 @@ try
     await File.WriteAllTextAsync(acfPath, sampleAcf);
 
     // Seed a second, unrelated manifest and a malformed file for scan coverage.
+    // App 200 is fully healthy: matching BuildID, no queued target and no pending download.
     await File.WriteAllTextAsync(Path.Combine(steamApps, "appmanifest_200.acf"),
         sampleAcf.Replace("\"appid\"\t\t\"100\"", "\"appid\"\t\t\"200\"")
             .Replace("\"name\"\t\t\"Test Game\"", "\"name\"\t\t\"Unmanaged Game\"")
             .Replace("\"SizeOnDisk\"\t\t\"0\"", "\"SizeOnDisk\"\t\t\"1024\"")
+            .Replace("\"TargetBuildID\"\t\t\"999\"", "\"TargetBuildID\"\t\t\"0\"")
             .Replace("\"buildid\"\t\t\"111\"", "\"buildid\"\t\t\"555\""));
     await File.WriteAllTextAsync(Path.Combine(steamApps, "appmanifest_broken.acf"), "not an acf");
 

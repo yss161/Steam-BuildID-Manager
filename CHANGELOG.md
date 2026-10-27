@@ -1,5 +1,20 @@
 # 更新记录
 
+## v1.3.2 — 2026-10-27
+
+### 修复
+
+1. 修复“更新后再打开 Steam 又变回去”：Steam 启动时会继续执行 ACF 里残留的下载队列。现在把更新状态整体复位，与新建配置生成的结果一致。
+2. `StateFlags` 直接写为 `4`（已完全安装）。1.3.1 只清除“需要更新”位，518 会变成 516，仍保留 512（更新已暂停），Steam 因此继续提示更新。
+3. 同时清零 `BytesToDownload`、`BytesDownloaded`、`BytesToStage`、`BytesStaged`、`StagingSize`，并把 `DownloadType` 改为 `1`、`TargetBuildID` 与 `ScheduledAutoUpdate` 归零。
+4. 检测逻辑改为识别整套“未复位”状态（非 4 的 StateFlags、非 0 的 TargetBuildID、存在待下载字节、DownloadType=4），并在提示中列出具体字段，例如“更新状态未复位（StateFlags=518、TargetBuildID=26236512、待下载 2.76 GB）”。
+5. 新增 2 项回归测试，覆盖暂停下载状态的复位，核心测试总数增至 117 项。
+
+### 说明
+
+1. 这一版的状态字段写法与原项目生成的结果一致，可避免 Steam 覆盖修改。
+2. 更新前仍需完全退出 Steam；更新后建议先确认 ACF 已写入再打开 Steam。
+
 ## v1.3.1 — 2026-10-21
 
 ### 修复

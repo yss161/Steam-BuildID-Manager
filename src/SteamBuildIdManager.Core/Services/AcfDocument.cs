@@ -31,14 +31,6 @@ public static class AcfDocument
         "^[ \\t]*\"manifest\"[ \\t]+\"(?<value>[^\"]*)\"",
         RegexOptions.Multiline | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
-    private static readonly Regex StateFlagsLine = new(
-        "^(?<prefix>[ \\t]*\"StateFlags\"[ \\t]+\")(?<value>[^\"]*)(?<quote>\")",
-        RegexOptions.Multiline | RegexOptions.CultureInvariant | RegexOptions.Compiled);
-
-    private static readonly Regex UpdateResultLine = new(
-        "^(?<prefix>[ \\t]*\"UpdateResult\"[ \\t]+\")(?<value>[^\"]*)(?<quote>\")",
-        RegexOptions.Multiline | RegexOptions.CultureInvariant | RegexOptions.Compiled);
-
     public static AcfManifest Parse(string filePath, string libraryPath, string content)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
@@ -57,6 +49,10 @@ public static class AcfDocument
 
         _ = ulong.TryParse(ReadString(content, "SizeOnDisk"), NumberStyles.None,
             CultureInfo.InvariantCulture, out var sizeOnDisk);
+        _ = ulong.TryParse(ReadString(content, "BytesToDownload"), NumberStyles.None,
+            CultureInfo.InvariantCulture, out var pendingBytes);
+        _ = ulong.TryParse(ReadString(content, "StagingSize"), NumberStyles.None,
+            CultureInfo.InvariantCulture, out var stagingSize);
 
         return new AcfManifest(
             FilePath: filePath,
@@ -73,7 +69,10 @@ public static class AcfDocument
             LastWriteTime: File.Exists(filePath)
                 ? new DateTimeOffset(File.GetLastWriteTimeUtc(filePath), TimeSpan.Zero)
                 : DateTimeOffset.UtcNow,
-            DepotManifests: ReadDepotManifests(content));
+            DepotManifests: ReadDepotManifests(content),
+            DownloadType: ReadString(content, "DownloadType") ?? "",
+            PendingBytes: pendingBytes,
+            StagingSize: stagingSize);
     }
 
     public static bool TryParse(string filePath, string libraryPath, string content,
@@ -166,7 +165,7 @@ public static class AcfDocument
         if (depotManifests is { Count: > 0 })
             result = WithDepotManifests(result, depotManifests);
         if (clearUpdateState)
-            result = ClearUpdateRequiredFlag(result);
+            result = ResetUpdateState(result);
         return result;
     }
 
@@ -219,20 +218,35 @@ public static class AcfDocument
         return content;
     }
 
-    /// <summary>Clear the "update required" bit (2) so Steam stops offering an update.</summary>
-    public static string ClearUpdateRequiredFlag(string content)
+    /// <summary>
+    /// Rewrite the update state the way a freshly generated manifest looks: fully installed,
+    /// no queued target build and no pending download. Steam resumes any paused or queued
+    /// transfer it finds here, which is what used to overwrite our edit on the next client start.
+    /// </summary>
+    public static string ResetUpdateState(string content)
     {
-        var flags = ReadString(content, "StateFlags");
-        if (int.TryParse(flags, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
-            && (value & 2) != 0)
-        {
-            var cleared = value & ~2;
-            content = StateFlagsLine.Replace(content, match =>
-                match.Groups["prefix"].Value + cleared.ToString(CultureInfo.InvariantCulture) + match.Groups["quote"].Value, 1);
-        }
+        // 4 = "Fully Installed". Clearing only bit 2 leaves 512 (UpdatePaused) behind, so Steam
+        // still treated the app as updating; a healthy install has exactly 4.
+        content = SetValue(content, "StateFlags", "4");
+        content = SetValue(content, "DownloadType", "1");
+        content = SetValue(content, "UpdateResult", "0");
+        content = SetValue(content, "BytesToDownload", "0");
+        content = SetValue(content, "BytesDownloaded", "0");
+        content = SetValue(content, "BytesToStage", "0");
+        content = SetValue(content, "BytesStaged", "0");
+        content = SetValue(content, "StagingSize", "0");
+        content = SetValue(content, "ScheduledAutoUpdate", "0");
+        content = SetValue(content, "TargetBuildID", "0");
+        return content;
+    }
 
-        return UpdateResultLine.Replace(content, match =>
-            match.Groups["prefix"].Value + "0" + match.Groups["quote"].Value, 1);
+    /// <summary>Replace the quoted value of an existing key, keeping indentation and quoting style.</summary>
+    public static string SetValue(string content, string key, string value)
+    {
+        var pattern = "^(?<prefix>[ \\t]*\"" + Regex.Escape(key) + "\"[ \\t]+\")(?<value>[^\"]*)(?<quote>\")";
+        return Regex.Replace(content, pattern,
+            match => match.Groups["prefix"].Value + value + match.Groups["quote"].Value,
+            RegexOptions.Multiline | RegexOptions.CultureInvariant);
     }
 
     private static IEnumerable<DepotBlock> EnumerateDepotBlocks(string content)

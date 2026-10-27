@@ -1,5 +1,12 @@
 # 推送记录
 
+## 2026-10-27 19:10:00 +08:00
+
+1. 推送人员：圆鲨鲨
+2. 目标分支：main
+3. 实现内容：版本升级到 1.3.2；修复“更新后再打开 Steam 又变回去”。对照原项目 SteamCN-GameLauncher 的备份与改写结果，确认差异在更新状态字段：原项目把 `StateFlags` 直接写为 4、`DownloadType` 写为 1、`BytesToDownload`/`BytesDownloaded`/`BytesToStage`/`BytesStaged`/`StagingSize` 清零、`TargetBuildID` 与 `ScheduledAutoUpdate` 归零。本版照此整体复位，替换 1.3.1 仅清 bit 2 的做法（518 → 516 仍保留 512 更新暂停位，Steam 会继续下载并覆盖 ACF）。检测逻辑同步改为识别整套未复位状态并列出具体字段。
+4. 验证结果：117 项核心回归测试通过；对真实 `appmanifest_4706890.acf` 做只读转换，输出 `StateFlags 518→4`、`DownloadType 4→1`、`BytesToDownload 2959529119→0`、`TargetBuildID 26236512→0`，字段集合与原项目生成结果一致；Core 与 App 均编译通过。
+5. 说明：本机 nuget.org 解析被拦截，改用华为云 NuGet 镜像完成本地还原；CI 仍走官方源。本机沙箱无法写入 `%LocalAppData%\SteamBuildIDManager\backups`，UI 写入闭环由单元测试与真实 ACF 只读转换验证。
 ## 2026-10-21 13:30:00 +08:00
 
 1. 推送人员：圆鲨鲨
@@ -31,12 +38,3 @@
 3. 实现内容：版本升级到 1.0.1；新增 Inno Setup 安装版、简体中文安装界面、按用户安装、开始菜单与可选桌面快捷方式、安装前关闭旧版本；新增 GitHub Actions 安装包构建、静默安装/卸载冒烟测试和双产物 Release。
 4. 验证结果：73 项核心回归测试通过；自包含 1.0.1 发布成功；本地 ISCC 编译安装包成功（约 60.6 MB）；GitHub Actions 运行 [39360218903](https://github.com/yss161/Steam-BuildID-Manager/actions/runs/39360218903) 的 Core tests、Build portable win-x64 package、Build installer 全部成功，安装包在 CI 中完成静默安装、EXE/PRI 检查和静默卸载；本机沙箱对开始菜单与 HKCU 卸载项的 ACL 限制不影响真实用户安装。
 5. 发布结果：创建 `v1.0.1` 标签，Release 同时附加便携版 zip 与安装版 exe。
-
-## 2026-10-20 09:21:37 +08:00
-
-1. 推送人员：圆鲨鲨
-2. 目标分支：main
-3. 实现内容：将 SteamCN-GameLauncher 精简为 Steam-only 的 Steam BuildID Manager；新增 BuildID 更新检测、单个/批量一键更新、ACF 自动备份、配置新建与重建、Steam 路径探测、Steam 运行中警告和陈旧 ACF 拒绝覆盖；新增 GitHub Actions 云编译与 Release 附件。
-4. 验证结果：73 项核心回归测试全部通过；本地与 GitHub Actions 的 win-x64 自包含产物均能启动并显示主窗口；Actions 运行 [39352987036](https://github.com/yss161/Steam-BuildID-Manager/actions/runs/39352987036) 的 Core tests 与 Build win-x64 package 均成功。
-5. 发布结果：创建 `v1.0.0` 标签，由同一工作流生成 GitHub Release 并附加 `Steam-BuildID-Manager-win-x64.zip`。
-6. 已知限制：公开 BuildID 依赖 `api.steamcmd.net`；只更新 BuildID，不修复 Depot 内容；CI 使用 `windows-latest`，首次运行需下载 Windows App SDK 包。

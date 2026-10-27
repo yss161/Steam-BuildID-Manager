@@ -198,20 +198,20 @@ public sealed class BuildIdUpdateService
                 };
 
             // Steam shows "需要更新" when any of these disagree: buildid, depot manifests,
-            // or the StateFlags "update required" bit. Fixing only buildid is not enough.
+            // or the persisted update state (StateFlags / queued target / download counters).
             var drift = FindDepotDrift(manifest, latest.DepotManifests);
             var reasons = new List<string>();
             if (comparison < 0)
                 reasons.Add(string.IsNullOrWhiteSpace(manifest.BuildId)
                     ? "ACF 缺少 BuildID"
                     : $"BuildID {manifest.BuildId} → {latest.BuildId}");
-            else if (comparison > 0 && drift.Count == 0 && !manifest.HasUpdateRequiredFlag)
+            else if (comparison > 0 && drift.Count == 0 && !manifest.NeedsStateRepair)
                 return new(manifest, latest.BuildId, BuildIdState.UpToDate, "当前值高于公开分支")
                 {
                     LatestDepotManifests = latest.DepotManifests,
                 };
 
-            if (manifest.HasUpdateRequiredFlag) reasons.Add("StateFlags 仍标记为需要更新");
+            if (manifest.NeedsStateRepair) reasons.Add(DescribeStateRepair(manifest));
             if (drift.Count > 0) reasons.Add($"{drift.Count} 个 Depot Manifest 落后");
 
             if (reasons.Count == 0)
@@ -234,6 +234,24 @@ public sealed class BuildIdUpdateService
         {
             return new(manifest, null, BuildIdState.Error, Shorten(ex.Message));
         }
+    }
+
+    /// <summary>Human-readable explanation of why Steam would keep offering an update.</summary>
+    private static string DescribeStateRepair(AcfManifest manifest)
+    {
+        var parts = new List<string>();
+        var flags = manifest.StateFlags.Trim();
+        if (flags.Length > 0 && !string.Equals(flags, "4", StringComparison.Ordinal))
+            parts.Add($"StateFlags={flags}");
+        var target = manifest.TargetBuildId.Trim();
+        if (target.Length > 0 && !string.Equals(target, "0", StringComparison.Ordinal))
+            parts.Add($"TargetBuildID={target}");
+        if (manifest.PendingBytes > 0)
+            parts.Add($"待下载 {manifest.PendingBytes / (1024d * 1024 * 1024):0.##} GB");
+        if (manifest.StagingSize > 0) parts.Add("暂存区未清空");
+        if (string.Equals(manifest.DownloadType.Trim(), "4", StringComparison.Ordinal))
+            parts.Add("DownloadType=4");
+        return "更新状态未复位（" + string.Join("、", parts) + "）";
     }
 
     /// <summary>Depots whose local manifest GID differs from the public branch.</summary>

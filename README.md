@@ -55,21 +55,21 @@ BuildIdUpdateService ──► api.steamcmd.net/v1/info/<AppID> ──► public
 
 仓库自带 [GitHub Actions 工作流](.github/workflows/build.yml)：
 
-1. 每次推送或提交 Pull Request 时，自动运行 115 项核心回归测试。
+1. 每次推送或提交 Pull Request 时，自动运行 117 项核心回归测试。
 2. 测试通过后，在 `windows-latest` 上以 `win-x64` 自包含方式发布 WinUI 3 应用。
 3. 用 Inno Setup 生成需要管理员权限的全机安装包，并在 CI 中执行静默安装、启动文件检查和静默卸载冒烟测试。
-4. 便携版 `Steam-BuildID-Manager-win-x64.zip` 和安装版 `Steam-BuildID-Manager-Setup-1.3.1.exe` 都会上传到 Actions Artifacts。
+4. 便携版 `Steam-BuildID-Manager-win-x64.zip` 和安装版 `Steam-BuildID-Manager-Setup-1.3.2.exe` 都会上传到 Actions Artifacts。
 5. 推送 `v*` 标签时，两个产物会自动附加到 GitHub Release。
 
 下载方式：
 
-1. **安装版**：从 [Releases](https://github.com/yss161/Steam-BuildID-Manager/releases) 下载 `Steam-BuildID-Manager-Setup-1.3.1.exe`。
+1. **安装版**：从 [Releases](https://github.com/yss161/Steam-BuildID-Manager/releases) 下载 `Steam-BuildID-Manager-Setup-1.3.2.exe`。
 2. **便携版**：从 Releases 下载 `Steam-BuildID-Manager-win-x64.zip`，解压后直接运行。
 3. **最新构建**：打开 [Actions](https://github.com/yss161/Steam-BuildID-Manager/actions/workflows/build.yml)，选择最近一次成功的 `build`，在页面底部下载安装版或便携版。
 
 ## 安装版
 
-1. 双击 `Steam-BuildID-Manager-Setup-1.3.1.exe`，安装程序会自动请求管理员权限，在 UAC 提示中选择“是”即可。
+1. 双击 `Steam-BuildID-Manager-Setup-1.3.2.exe`，安装程序会自动请求管理员权限，在 UAC 提示中选择“是”即可。
 2. 默认安装到 `C:\Program Files\SteamBuildIDManager`；开始菜单快捷方式对所有用户可见，桌面快捷方式默认不勾选。
 3. 安装程序会检测并关闭正在运行的旧版本，安装完成后可直接启动。
 4. 卸载需要管理员权限，入口在 Windows“设置 → 应用 → 已安装的应用”，不会删除用户设置和 ACF 备份。

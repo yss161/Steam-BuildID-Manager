@@ -16,7 +16,10 @@ public sealed record AcfManifest(
     ulong SizeOnDisk,
     IReadOnlyList<string> DepotIds,
     DateTimeOffset LastWriteTime,
-    IReadOnlyDictionary<string, string>? DepotManifests = null)
+    IReadOnlyDictionary<string, string>? DepotManifests = null,
+    string DownloadType = "",
+    ulong PendingBytes = 0,
+    ulong StagingSize = 0)
 {
     /// <summary>DepotID → manifest GID recorded in InstalledDepots.</summary>
     public IReadOnlyDictionary<string, string> Manifests =>
@@ -40,10 +43,29 @@ public sealed record AcfManifest(
     public bool IsBuildIdValid => ulong.TryParse(BuildId,
         NumberStyles.None, CultureInfo.InvariantCulture, out var id) && id > 0;
 
-    /// <summary>StateFlags bit 2 means "update required"; Steam keeps offering the update until it is cleared.</summary>
+    /// <summary>StateFlags bit 2 means "update required".</summary>
     public bool HasUpdateRequiredFlag =>
         int.TryParse(StateFlags, NumberStyles.Integer, CultureInfo.InvariantCulture, out var flags)
         && (flags & 2) != 0;
+
+    /// <summary>
+    /// True when Steam's persisted update state would make the client resume or re-offer a
+    /// download: a non-4 StateFlags (518 = paused, 6 = update required), a queued target build,
+    /// or non-zero download counters. Missing keys are treated as "nothing queued".
+    /// </summary>
+    public bool NeedsStateRepair
+    {
+        get
+        {
+            var flags = StateFlags.Trim();
+            var target = TargetBuildId.Trim();
+            return (flags.Length > 0 && !string.Equals(flags, "4", StringComparison.Ordinal))
+                || (target.Length > 0 && !string.Equals(target, "0", StringComparison.Ordinal))
+                || PendingBytes > 0
+                || StagingSize > 0
+                || string.Equals(DownloadType.Trim(), "4", StringComparison.Ordinal);
+        }
+    }
 }
 
 public sealed record AcfScanResult(IReadOnlyList<AcfManifest> Manifests, IReadOnlyList<string> Errors)

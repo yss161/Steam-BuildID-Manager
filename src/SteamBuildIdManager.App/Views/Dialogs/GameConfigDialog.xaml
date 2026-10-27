@@ -22,7 +22,8 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBox x:Name="AppIdBox" Header="AppID" PlaceholderText="例如 123456"/>
+                <TextBox x:Name="AppIdBox" Header="AppID" PlaceholderText="例如 123456"
+                         LostFocus="AppIdBox_LostFocus"/>
                 <Button x:Name="FetchButton" Grid.Column="1" Content="获取 Steam 信息"
                         VerticalAlignment="Bottom" Click="Fetch_Click"/>
             </Grid>

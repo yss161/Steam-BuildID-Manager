@@ -8,6 +8,7 @@
     mc:Ignorable="d"
     Title="获取游戏信息"
     PrimaryButtonText="复制启动命令并关闭"
+    SecondaryButtonText="创建为新配置"
     CloseButtonText="关闭"
     DefaultButton="Close"
     MinWidth="560">

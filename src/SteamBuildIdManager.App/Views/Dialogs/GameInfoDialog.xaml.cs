@@ -18,11 +18,34 @@ public sealed partial class GameInfoDialog : ContentDialog
         InitializeComponent();
         if (!string.IsNullOrWhiteSpace(initialAppId)) AppIdBox.Text = initialAppId;
         IsPrimaryButtonEnabled = false;
+        IsSecondaryButtonEnabled = false;
         PrimaryButtonClick += OnPrimaryButtonClick;
+        SecondaryButtonClick += OnSecondaryButtonClick;
     }
 
     /// <summary>Launch command built from the primary executable, offered as a copyable shortcut.</summary>
     public string LaunchCommand { get; private set; } = "";
+
+    /// <summary>Set when the user asks to turn the fetched metadata into a new Steam config.</summary>
+    public SteamGameSummary? CreatePreset { get; private set; }
+
+    private void OnSecondaryButtonClick(ContentDialog sender, ContentDialogButtonClickEventArgs args)
+    {
+        if (_summary == null || !CanCreateConfig(_summary))
+        {
+            args.Cancel = true;
+            return;
+        }
+
+        CreatePreset = _summary;
+    }
+
+    private static bool CanCreateConfig(SteamGameSummary summary) =>
+        summary.Depots.Count > 0
+        && !string.IsNullOrWhiteSpace(summary.BuildId)
+        && !string.IsNullOrWhiteSpace(summary.DisplayName)
+        && !string.IsNullOrWhiteSpace(summary.InstallDirectory)
+        && !string.IsNullOrWhiteSpace(summary.PlaceholderExeName);
 
     private void OnPrimaryButtonClick(ContentDialog sender, ContentDialogButtonClickEventArgs args)
     {
@@ -58,6 +81,7 @@ public sealed partial class GameInfoDialog : ContentDialog
             _summary = await _lookup.LookupAsync(appId);
             Render(_summary);
             IsPrimaryButtonEnabled = _summary.Executables.Count > 0;
+            IsSecondaryButtonEnabled = CanCreateConfig(_summary);
 
             ShowStatus(_summary.Warnings.Count == 0 ? "获取成功" : "部分信息缺失",
                 _summary.Warnings.Count == 0
@@ -70,6 +94,7 @@ public sealed partial class GameInfoDialog : ContentDialog
         {
             _summary = null;
             Clear();
+            IsSecondaryButtonEnabled = false;
             ShowStatus("获取失败", ex.Message, InfoBarSeverity.Error);
         }
         finally

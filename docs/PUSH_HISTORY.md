@@ -1,5 +1,12 @@
 # 推送记录
 
+## 2026-10-27 19:50:00 +08:00
+
+1. 推送人员：圆鲨鲨
+2. 目标分支：main
+3. 实现内容：版本升级到 1.4.0；「获取游戏信息」新增“创建为新配置”，填入 AppID 获取成功后可直接生成 appmanifest 与占位 EXE；单库时直接写入、多库时弹出已预填的新建对话框；「新建配置」中输入 AppID 后失焦自动获取 Steam 信息。
+4. 验证结果：117 项核心回归测试通过；用临时库实测“填入 4706890/4162040 → 获取信息 → 创建为新配置”，成功写出 `appmanifest_4162040.acf` 与 `common\Zenless Zone Zero\HYP.exe`，ACF 为 `StateFlags=4`、`DownloadType=1`、`Bytes*=0`、`TargetBuildID=0`，与新建配置生成结果一致；列表自动刷新为 1 个配置。
+5. 说明：本机 nuget.org 解析被拦截，本地改用华为云 NuGet 镜像还原；CI 仍使用官方源。
 ## 2026-10-27 19:10:00 +08:00
 
 1. 推送人员：圆鲨鲨
@@ -30,11 +37,3 @@
 3. 实现内容：版本升级到 1.1.0；新增本地 Steam 账号读取，解析 `config\loginusers.vdf` 并按 `MostRecent`、`AutoLogin`、登录时间排序；设置页支持自动填充和“读取本地账号”多账号选择；`loginusers.vdf` 缺失时从 `userdata` 的 SteamID32 换算；补充账号解析、大小写时间戳和 userdata 回退测试。
 4. 验证结果：79 项核心回归测试通过；本机实际 `loginusers.vdf` 读取到 6 个账号并自动填充最近登录账号；UI Automation 验证多账号弹窗、默认排序和选择其他账号后 SteamID64 正确更新；1.1.0 自包含发布与 Inno Setup 安装包编译成功；GitHub Actions 运行 [39363595234](https://github.com/yss161/Steam-BuildID-Manager/actions/runs/39363595234) 的 Core tests、Build portable、Build installer 全部成功，安装包完成静默安装/卸载冒烟测试。
 5. 发布结果：创建 `v1.1.0` 标签，Release 同时附加便携版 zip 与安装版 exe。
-
-## 2026-10-20 10:40:00 +08:00
-
-1. 推送人员：圆鲨鲨
-2. 目标分支：main
-3. 实现内容：版本升级到 1.0.1；新增 Inno Setup 安装版、简体中文安装界面、按用户安装、开始菜单与可选桌面快捷方式、安装前关闭旧版本；新增 GitHub Actions 安装包构建、静默安装/卸载冒烟测试和双产物 Release。
-4. 验证结果：73 项核心回归测试通过；自包含 1.0.1 发布成功；本地 ISCC 编译安装包成功（约 60.6 MB）；GitHub Actions 运行 [39360218903](https://github.com/yss161/Steam-BuildID-Manager/actions/runs/39360218903) 的 Core tests、Build portable win-x64 package、Build installer 全部成功，安装包在 CI 中完成静默安装、EXE/PRI 检查和静默卸载；本机沙箱对开始菜单与 HKCU 卸载项的 ACL 限制不影响真实用户安装。
-5. 发布结果：创建 `v1.0.1` 标签，Release 同时附加便携版 zip 与安装版 exe。

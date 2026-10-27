@@ -16,7 +16,8 @@ public sealed partial class GameConfigDialog : ContentDialog
     private string? _fetchedAppId;
     private bool _busy;
 
-    public GameConfigDialog(AppSettings settings, IReadOnlyList<string> libraryRoots, AcfManifest? existing = null)
+    public GameConfigDialog(AppSettings settings, IReadOnlyList<string> libraryRoots, AcfManifest? existing = null,
+        SteamGameSummary? preset = null)
     {
         InitializeComponent();
         _settings = settings;
@@ -24,22 +25,60 @@ public sealed partial class GameConfigDialog : ContentDialog
         LibraryCombo.ItemsSource = libraryRoots;
         if (libraryRoots.Count > 0) LibraryCombo.SelectedIndex = 0;
 
-        if (existing == null) return;
+        if (existing != null)
+        {
+            Title = "重建 Steam 配置";
+            AppIdBox.Text = existing.AppId;
+            AppIdBox.IsReadOnly = true;
+            AppIdBox.IsEnabled = false;
+            NameBox.Text = existing.Name;
+            InstallDirBox.Text = existing.InstallDirectory;
+            BuildIdBox.Text = existing.BuildId;
+            var selectedLibrary = libraryRoots.FirstOrDefault(path =>
+                string.Equals(SteamLocator.NormalizeLibraryRoot(path), SteamLocator.NormalizeLibraryRoot(existing.LibraryPath),
+                    StringComparison.OrdinalIgnoreCase));
+            if (selectedLibrary != null) LibraryCombo.SelectedItem = selectedLibrary;
+            return;
+        }
 
-        Title = "重建 Steam 配置";
-        AppIdBox.Text = existing.AppId;
-        AppIdBox.IsReadOnly = true;
-        AppIdBox.IsEnabled = false;
-        NameBox.Text = existing.Name;
-        InstallDirBox.Text = existing.InstallDirectory;
-        BuildIdBox.Text = existing.BuildId;
-        var selectedLibrary = libraryRoots.FirstOrDefault(path =>
-            string.Equals(SteamLocator.NormalizeLibraryRoot(path), SteamLocator.NormalizeLibraryRoot(existing.LibraryPath),
-                StringComparison.OrdinalIgnoreCase));
-        if (selectedLibrary != null) LibraryCombo.SelectedItem = selectedLibrary;
+        if (preset != null) ApplyPreset(preset, libraryRoots);
+    }
+
+    /// <summary>Fill every field from an already fetched lookup so the user only has to confirm.</summary>
+    private void ApplyPreset(SteamGameSummary preset, IReadOnlyList<string> libraryRoots)
+    {
+        AppIdBox.Text = preset.AppId;
+        NameBox.Text = preset.DisplayName;
+        InstallDirBox.Text = preset.InstallDirectory;
+        BuildIdBox.Text = preset.BuildId;
+        ExeBox.Text = preset.PlaceholderExeName;
+        _fetchedAppId = preset.AppId;
+        _depots = preset.Depots;
+
+        ExecutableCombo.ItemsSource = preset.Executables;
+        ExecutableCombo.Visibility = preset.Executables.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
+        if (preset.Executables.Count > 0) ExecutableCombo.SelectedItem = preset.Executables[0];
+
+        DepotsText.Text = preset.Depots.Count == 0
+            ? "没有找到带有 public Manifest 的兼容 Depot。"
+            : string.Join("\n", preset.Depots.Select(candidate =>
+                $"{candidate.Depot.Id} · Manifest {candidate.Manifest}"));
+
+        if (libraryRoots.Count == 1) LibraryCombo.SelectedIndex = 0;
+        ShowStatus("已填入游戏信息", "可直接点击“保存并写入 ACF”，或修改后保存。", InfoBarSeverity.Success);
+        AppLog.Info($"已用 AppID {preset.AppId} 的查询结果预填新建配置对话框。");
     }
 
     public GameConfigWriteResult? SavedResult { get; private set; }
+
+    /// <summary>Entering a valid AppID and leaving the box fetches the metadata without pressing the button.</summary>
+    private async void AppIdBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (_busy) return;
+        if (!SteamAppInfoService.TryNormalizeAppId(AppIdBox.Text, out var appId)) return;
+        if (string.Equals(_fetchedAppId, appId, StringComparison.Ordinal)) return;
+        await FetchAsync(appId);
+    }
 
     private async void Fetch_Click(object sender, RoutedEventArgs e)
     {
@@ -50,6 +89,11 @@ public sealed partial class GameConfigDialog : ContentDialog
             return;
         }
 
+        await FetchAsync(appId);
+    }
+
+    private async Task FetchAsync(string appId)
+    {
         SetBusy(true, "正在获取 Steam 信息…");
         AppLog.Info($"开始获取 AppID {appId} 的游戏信息（api.steamcmd.net）。");
         _depots = Array.Empty<SteamDepotCandidate>();

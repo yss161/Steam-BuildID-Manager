@@ -456,6 +456,72 @@ public sealed partial class LibraryPage : Page
     {
         var dialog = new GameInfoDialog { XamlRoot = XamlRoot };
         await dialog.ShowAsync();
+        if (dialog.CreatePreset is { } preset) await CreateConfigFromPresetAsync(preset);
+    }
+
+    /// <summary>
+    /// Turn a lookup result into an appmanifest. With a single library the write happens straight
+    /// away; with several the prefilled dialog lets the user pick the target library.
+    /// </summary>
+    private async Task CreateConfigFromPresetAsync(SteamGameSummary preset)
+    {
+        _settings = _settingsService.Load();
+        if (string.IsNullOrWhiteSpace(_settings.SteamInstallPath))
+            _settings.SteamInstallPath = SteamLocator.DetectSteamInstallPath() ?? "";
+        var roots = ResolveLibraryRoots(_settings);
+
+        if (roots.Count == 0 || string.IsNullOrWhiteSpace(_settings.SteamId)
+            || !File.Exists(Path.Combine(_settings.SteamInstallPath, "steam.exe")))
+        {
+            await ShowSetupRequiredAsync();
+            return;
+        }
+
+        if (roots.Count > 1)
+        {
+            var picker = new GameConfigDialog(_settings, roots, existing: null, preset: preset) { XamlRoot = XamlRoot };
+            if (await picker.ShowAsync() == ContentDialogResult.Primary && picker.SavedResult is { } saved)
+                await OnConfigSavedAsync(saved);
+            return;
+        }
+
+        var request = new GameConfigRequest(
+            AppId: preset.AppId,
+            DisplayName: preset.DisplayName,
+            InstallDirectory: preset.InstallDirectory,
+            PlaceholderExeName: preset.PlaceholderExeName,
+            BuildId: preset.BuildId,
+            SteamId: _settings.SteamId,
+            Depots: preset.Depots.Select(candidate => new SteamDepotConfig
+            {
+                DepotId = candidate.Depot.Id,
+                ManifestId = candidate.Manifest,
+                Size = "0",
+            }).ToList(),
+            LibraryPath: roots[0],
+            SteamInstallPath: _settings.SteamInstallPath,
+            RealGameExePath: "",
+            LaunchArguments: "");
+
+        var error = GameConfigService.Validate(request, out _, out _, out _);
+        if (error != null)
+        {
+            AppLog.Warning($"无法自动创建 AppID {preset.AppId}：{error}");
+            ShowInfo("无法自动创建配置", error, InfoBarSeverity.Error);
+            return;
+        }
+
+        try
+        {
+            AppLog.Info($"正在根据查询结果自动创建 AppID {preset.AppId} 的配置。");
+            var result = await new GameConfigService().WriteAsync(request);
+            await OnConfigSavedAsync(result);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error($"自动创建 AppID {preset.AppId} 的配置失败", ex);
+            ShowInfo("创建失败", ex.Message, InfoBarSeverity.Error);
+        }
     }
 
     private async void ShowAll_Toggled(object sender, RoutedEventArgs e)

@@ -46,6 +46,9 @@ const string sampleAcf = """
 }
 """;
 
+// Same fixture without a queued target: the only state Steam agrees with.
+var healthyAcf = sampleAcf.Replace("\"TargetBuildID\"		\"999\"", "\"TargetBuildID\"		\"0\"");
+
 var manifest = AcfDocument.Parse(@"C:\Library\steamapps\appmanifest_100.acf", @"C:\Library", sampleAcf);
 Check(manifest.AppId == "100" && manifest.Name == "Test Game" && manifest.InstallDirectory == "TestGame",
     "ACF parser reads identity fields");
@@ -126,8 +129,7 @@ try
     var driftSteamApps = Path.Combine(driftLibrary, "steamapps");
     Directory.CreateDirectory(driftSteamApps);
     // A healthy manifest: installed, no queued target, no pending download.
-    var healthyAcf = sampleAcf.Replace("\"TargetBuildID\"\t\t\"999\"", "\"TargetBuildID\"\t\t\"0\"");
-    await File.WriteAllTextAsync(Path.Combine(driftSteamApps, "appmanifest_100.acf"), sampleAcf);
+    await File.WriteAllTextAsync(Path.Combine(driftSteamApps, "appmanifest_100.acf"), healthyAcf);
 
     var driftProvider = new StubPublicBuildProvider("111", new Dictionary<string, string>
     {
@@ -166,7 +168,7 @@ try
     var flagSteamApps = Path.Combine(flagRoot, "steamapps");
     Directory.CreateDirectory(flagSteamApps);
     await File.WriteAllTextAsync(Path.Combine(flagSteamApps, "appmanifest_100.acf"),
-        sampleAcf.Replace("\"StateFlags\"\t\t\"4\"", "\"StateFlags\"\t\t\"6\""));
+        healthyAcf.Replace("\"StateFlags\"\t\t\"4\"", "\"StateFlags\"\t\t\"6\""));
     var flagScan = matchedService.Scan(new[] { flagRoot }).Manifests.Single();
     Check(flagScan.HasUpdateRequiredFlag, "scanned manifest exposes the update-required StateFlags bit");
     var flagCheck = (await matchedService.CheckAsync(new[] { flagScan })).Single();
@@ -388,9 +390,8 @@ try
     var steamApps = Path.Combine(libraryRoot, "steamapps");
     Directory.CreateDirectory(steamApps);
     var acfPath = Path.Combine(steamApps, "appmanifest_100.acf");
-    await File.WriteAllTextAsync(acfPath, sampleAcf);
+    await File.WriteAllTextAsync(acfPath, healthyAcf);
 
-    // Seed a second, unrelated manifest and a malformed file for scan coverage.
     // App 200 is fully healthy: matching BuildID, no queued target and no pending download.
     await File.WriteAllTextAsync(Path.Combine(steamApps, "appmanifest_200.acf"),
         sampleAcf.Replace("\"appid\"\t\t\"100\"", "\"appid\"\t\t\"200\"")
@@ -895,6 +896,103 @@ finally
     try { listener.Stop(); } catch { }
     try { if (Directory.Exists(servedRoot)) Directory.Delete(servedRoot, recursive: true); } catch { }
 }
+
+// ── Version-evidence guard ───────────────────────────────────────────────
+Check(SteamManifestUpdateGuard.DescribeConflict(healthyAcf, "100", "111") == null,
+    "a consistent candidate passes the guard");
+Check(SteamManifestUpdateGuard.DescribeConflict(sampleAcf, "100", "111")?.Contains("版本信息冲突", StringComparison.Ordinal) == true,
+    "a mismatched TargetBuildID is rejected instead of overwritten");
+Check(SteamManifestUpdateGuard.DescribeConflict(healthyAcf, "100", "999") == null,
+    "a newer candidate is accepted");
+Check(SteamManifestUpdateGuard.DescribeConflict(healthyAcf, "100", "5")?.Contains("回退", StringComparison.Ordinal) == true,
+    "a candidate older than the installed build is rejected");
+Check(SteamManifestUpdateGuard.DescribeConflict(healthyAcf, "200", "111") != null,
+    "an AppID mismatch is rejected");
+Check(SteamManifestUpdateGuard.HasNewerTarget(sampleAcf, "111")
+    && !SteamManifestUpdateGuard.HasNewerTarget(healthyAcf, "111"),
+    "queued target detection matches the ACF state");
+Check(SteamManifestUpdateGuard.DescribeStaleSource("26236512", "26092471", "26092471")
+        ?.Contains("来源可能尚未同步", StringComparison.Ordinal) == true,
+    "a stale source is explained instead of offered as an update");
+Check(SteamManifestUpdateGuard.DescribeStaleSource("0", "111", "111") == null,
+    "a clean ACF has no stale-source reason");
+
+// The update path must refuse the write rather than erase Steam's recorded intent.
+var guardRoot = Path.Combine(Path.GetTempPath(), "sbim-guard-" + Guid.NewGuid().ToString("N"));
+try
+{
+    var guardLibrary = Path.Combine(guardRoot, "lib");
+    var guardApps = Path.Combine(guardLibrary, "steamapps");
+    Directory.CreateDirectory(guardApps);
+    var guardPath = Path.Combine(guardApps, "appmanifest_100.acf");
+    await File.WriteAllTextAsync(guardPath, sampleAcf);
+
+    var guardService = new BuildIdUpdateService(
+        new StubPublicBuildProvider("111", new Dictionary<string, string> { ["101"] = "201", ["102"] = "202" }),
+        new ManifestFileService(Path.Combine(guardRoot, "backups")));
+    var guardScan = guardService.Scan(new[] { guardLibrary }).Manifests.Single();
+    var guardCheck = (await guardService.CheckAsync(new[] { guardScan })).Single();
+    Check(guardCheck.State == BuildIdState.SourceStale && !guardCheck.CanUpdate,
+        "a conflicting TargetBuildID is reported as a stale source, not an updatable row");
+
+    var threw = false;
+    try { await guardService.UpdateAsync(guardScan, "111"); }
+    catch (SteamAppInfoException) { threw = true; }
+    Check(threw && AcfDocument.ReadString(await File.ReadAllTextAsync(guardPath), "TargetBuildID") == "999",
+        "the update path refuses to erase a conflicting TargetBuildID");
+}
+finally
+{
+    try { if (Directory.Exists(guardRoot)) Directory.Delete(guardRoot, recursive: true); } catch { }
+}
+
+// ── Resolver: prefer the higher build, never mix sources ─────────────────
+var staleApp = new SteamAppInfo("100", "Game", new Dictionary<string, string>(), "GameDir",
+    new Dictionary<string, string> { ["public"] = "111" },
+    new[] { new SteamDepotInfo("101", "Depot", new SteamPlatformFilter("windows", "64", ""), "",
+        new Dictionary<string, string> { ["public"] = "201" }) },
+    new[] { new SteamLaunchInfo("0", "Play", "Game.exe", "", "", new SteamPlatformFilter("windows", "64", "")) })
+    { Source = "接口" };
+var freshApp = staleApp with
+{
+    BranchBuildIds = new Dictionary<string, string> { ["public"] = "222" },
+    Depots = new[]
+    {
+        new SteamDepotInfo("101", "Depot", new SteamPlatformFilter("windows", "64", ""), "",
+            new Dictionary<string, string> { ["public"] = "999" }),
+    },
+    Source = "本机 Steam 缓存",
+};
+var options2 = new SteamAppSelectionOptions();
+var resolved = SteamUpdateInfoResolver.Choose(
+    new[] { (staleApp, "接口"), (freshApp, "本机 Steam 缓存") }, healthyAcf, "100", options2);
+Check(resolved.App.BranchBuildIds["public"] == "222" && resolved.Source == "本机 Steam 缓存",
+    "the resolver prefers the higher build and keeps one snapshot intact");
+
+var incompleteApp = staleApp with { InstallDirectory = "" };
+try
+{
+    SteamUpdateInfoResolver.Choose(new[] { (incompleteApp, "残缺来源") }, healthyAcf, "100", options2);
+    throw new Exception("FAILED: incomplete candidate accepted");
+}
+catch (SteamAppInfoException) { Check(true, "incomplete candidates are rejected"); }
+
+var diag = new List<string>();
+var conflictThrew = false;
+try { SteamUpdateInfoResolver.Choose(new[] { (staleApp, "接口") }, sampleAcf, "100", options2, diag); }
+catch (SteamAppInfoException) { conflictThrew = true; }
+Check(conflictThrew && diag.Count > 0, "diagnostics explain why a conflicting candidate was dropped");
+
+// ── appinfo cache reader: fail closed on unknown input ───────────────────
+using (var bogus = new MemoryStream(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 }))
+{
+    var failed = false;
+    try { SteamAppCacheReader.Read(bogus, "100"); }
+    catch (InvalidDataException) { failed = true; }
+    Check(failed, "an unknown appinfo format is rejected instead of guessed");
+}
+Check(SteamAppCacheReader.FindCachePath(null) == null, "cache lookup without a Steam path returns null");
+
 
 if (args.Contains("--live"))
 {

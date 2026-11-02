@@ -79,6 +79,8 @@ public enum BuildIdState
     UpToDate,
     UpdateAvailable,
     Error,
+    /// <summary>The source contradicts version evidence Steam itself recorded; never write in this state.</summary>
+    SourceStale,
 }
 
 /// <summary>Result of comparing one manifest with the public branch state.</summary>
@@ -90,6 +92,9 @@ public sealed record BuildIdCheckResult(
 {
     /// <summary>Public branch depot manifests; null when only the BuildID was compared.</summary>
     public IReadOnlyDictionary<string, string>? LatestDepotManifests { get; init; }
+
+    /// <summary>Which data source produced <see cref="LatestBuildId"/>, for UI and log display.</summary>
+    public string Source { get; init; } = "";
 
     public bool CanUpdate => State == BuildIdState.UpdateAvailable
         && !string.IsNullOrWhiteSpace(LatestBuildId);

@@ -14,7 +14,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
-    <Version>1.6.0</Version>
+    <Version>1.7.0</Version>
     <Product>Steam BuildID 管理器</Product>
     <AssemblyTitle>Steam BuildID 管理器</AssemblyTitle>
     <Description>检测并一键更新 Steam appmanifest 的 BuildID</Description>
@@ -42,6 +42,11 @@
     <!-- Ships in the portable zip: clears the mark-of-the-web that triggers SmartScreen. -->
     <Content Include="Unblock.cmd">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <!-- LGPL-2.1 obligations for the bundled SteamKit2 package. -->
+    <Content Include="Assets\ThirdParty\SteamKit2\*.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
   </ItemGroup>
 

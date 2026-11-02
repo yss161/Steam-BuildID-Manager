@@ -25,7 +25,14 @@ public interface IBuildIdProvider
 }
 
 /// <summary>Public branch state used to make a local ACF match Steam again.</summary>
-public sealed record SteamPublicBuild(string BuildId, IReadOnlyDictionary<string, string> DepotManifests);
+public sealed record SteamPublicBuild(string BuildId, IReadOnlyDictionary<string, string> DepotManifests)
+{
+    /// <summary>Which source produced this snapshot, shown in the UI and log.</summary>
+    public string Source { get; init; } = "";
+
+    /// <summary>When the snapshot was received (not when it was published).</summary>
+    public DateTimeOffset? RetrievedAt { get; init; }
+}
 
 /// <summary>Reads the public branch BuildID from the SteamCMD info API and caches short-lived results.</summary>
 public sealed class SteamBuildIdProvider : IBuildIdProvider
@@ -195,11 +202,25 @@ public sealed class BuildIdUpdateService
                 return new(manifest, latest.BuildId, BuildIdState.Error, "当前 ACF 的 BuildID 格式异常")
                 {
                     LatestDepotManifests = latest.DepotManifests,
+                    Source = latest.Source,
                 };
 
             // Steam shows "需要更新" when any of these disagree: buildid, depot manifests,
             // or the persisted update state (StateFlags / queued target / download counters).
             var drift = FindDepotDrift(manifest, latest.DepotManifests);
+
+            // Steam already recorded a newer intent (TargetBuildID) than this source reports.
+            // Rewriting the ACF here would erase that evidence and Steam would restore it anyway,
+            // so report it as a stale source instead of an updatable row.
+            var staleReason = SteamManifestUpdateGuard.DescribeStaleSource(
+                manifest.TargetBuildId, manifest.BuildId, latest.BuildId);
+            if (staleReason != null)
+                return new(manifest, latest.BuildId, BuildIdState.SourceStale, staleReason)
+                {
+                    LatestDepotManifests = latest.DepotManifests,
+                    Source = latest.Source,
+                };
+
             var reasons = new List<string>();
             if (comparison < 0)
                 reasons.Add(string.IsNullOrWhiteSpace(manifest.BuildId)
@@ -209,6 +230,7 @@ public sealed class BuildIdUpdateService
                 return new(manifest, latest.BuildId, BuildIdState.UpToDate, "当前值高于公开分支")
                 {
                     LatestDepotManifests = latest.DepotManifests,
+                    Source = latest.Source,
                 };
 
             if (manifest.NeedsStateRepair) reasons.Add(DescribeStateRepair(manifest));
@@ -218,12 +240,14 @@ public sealed class BuildIdUpdateService
                 return new(manifest, latest.BuildId, BuildIdState.UpToDate, "已是最新")
                 {
                     LatestDepotManifests = latest.DepotManifests,
+                    Source = latest.Source,
                 };
 
             return new(manifest, latest.BuildId, BuildIdState.UpdateAvailable,
                 string.Join("；", reasons) + "，可一键修复")
             {
                 LatestDepotManifests = latest.DepotManifests,
+                Source = latest.Source,
             };
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -285,6 +309,10 @@ public sealed class BuildIdUpdateService
             throw new InvalidOperationException("ACF 已被其他程序修改，请刷新列表后重试。");
         if (!string.Equals(current.AppId, manifest.AppId, StringComparison.Ordinal))
             throw new InvalidOperationException("ACF 的 AppID 与扫描结果不一致，请刷新列表。");
+
+        // Never erase version evidence Steam itself recorded: a mismatched TargetBuildID or a
+        // higher installed build means the source is stale, and resetting the state would destroy it.
+        SteamManifestUpdateGuard.Validate(content, manifest.AppId, latestBuildId);
 
         var updatedContent = AcfDocument.WithBuildIdAndDepots(content, latestBuildId, latestDepotManifests);
         var write = await _files.WriteWithBackupAsync(

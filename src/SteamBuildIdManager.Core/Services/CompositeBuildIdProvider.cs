@@ -116,7 +116,10 @@ public sealed class CompositeBuildIdProvider : IBuildIdProvider
 
                 _cooldownUntil.TryRemove(source.Name, out _);
                 _lastSourceByApp[appId] = source.Name;
-                return result;
+                // Keep the provider's own label when it has one (e.g. the mirror's fallback notice).
+                return string.IsNullOrWhiteSpace(result.Source)
+                    ? result with { Source = source.Name }
+                    : result;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {

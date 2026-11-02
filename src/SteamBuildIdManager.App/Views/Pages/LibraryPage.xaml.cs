@@ -147,8 +147,9 @@ public sealed partial class LibraryPage : Page
     }
 
     /// <summary>
-    /// Compose the provider chain from settings. SteamCMD is only added when steamcmd.exe can be
-    /// located, so a missing install quietly degrades to the HTTP source instead of failing scans.
+    /// Compose the provider chain from settings. The local Steam cache and the direct Steam query are
+    /// preferred because they reflect what Steam itself knows; the third-party mirror and SteamCMD
+    /// remain as fallbacks. A source that is unavailable is simply skipped.
     /// </summary>
     private static BuildIdUpdateService CreateUpdateService(AppSettings settings)
     {
@@ -156,11 +157,16 @@ public sealed partial class LibraryPage : Page
         var api = new SteamBuildIdProvider();
         if (mode == DataSourceModes.ApiOnly) return new BuildIdUpdateService(api);
 
+        var cachePath = SteamAppCacheReader.FindCachePath(settings.SteamInstallPath);
+        var cache = cachePath == null ? null : new SteamAppCacheBuildIdProvider(cachePath);
+        var live = new SteamLiveBuildIdProvider();
+
         var steamCmdPath = SteamCmdLocator.Resolve(settings.SteamCmdPath, settings.SteamInstallPath);
-        var sources = new List<(string Name, IBuildIdProvider Provider)>();
-        (string Name, IBuildIdProvider Provider)? steamCmd = steamCmdPath == null
+        var steamCmd = steamCmdPath == null
             ? null
-            : ("SteamCMD", (IBuildIdProvider)new SteamCmdBuildIdProvider(new SteamCmdService(steamCmdPath)));
+            : new SteamCmdBuildIdProvider(new SteamCmdService(steamCmdPath));
+
+        var sources = new List<(string Name, IBuildIdProvider Provider)>();
 
         if (mode == DataSourceModes.SteamCmdOnly)
         {
@@ -169,22 +175,24 @@ public sealed partial class LibraryPage : Page
                 AppLog.Warning("已选择仅 SteamCMD，但未找到 steamcmd.exe，本次回退到在线接口。");
                 return new BuildIdUpdateService(api);
             }
-            return new BuildIdUpdateService(new CompositeBuildIdProvider(new[] { steamCmd.Value }));
+            return new BuildIdUpdateService(new CompositeBuildIdProvider(new[] { ("SteamCMD", (IBuildIdProvider)steamCmd) }));
         }
 
-        if (steamCmdPath != null && mode == DataSourceModes.SteamCmdFirst)
+        // Local cache first (instant, offline), then the direct Steam query, then the mirror.
+        if (cache != null) sources.Add(("本机 Steam 缓存", (IBuildIdProvider)cache));
+        sources.Add(("Steam 直连", (IBuildIdProvider)live));
+        if (steamCmd != null) sources.Add(("SteamCMD", (IBuildIdProvider)steamCmd));
+        sources.Add(("api.steamcmd.net", (IBuildIdProvider)api));
+
+        if (mode == DataSourceModes.ApiFirst)
         {
-            AppLog.Info($"数据源：优先 SteamCMD（{steamCmdPath}），失败时回退到 api.steamcmd.net。");
-            sources.Add(steamCmd!.Value);
-            sources.Add(("api.steamcmd.net", api));
+            sources = sources
+                .OrderBy(pair => pair.Name == "api.steamcmd.net" ? 0 : pair.Name == "SteamCMD" ? 1 : 2)
+                .ToList();
         }
-        else
-        {
-            if (steamCmdPath == null) AppLog.Info("未找到 steamcmd.exe，本次只使用 api.steamcmd.net。");
-            else AppLog.Info("数据源：优先 api.steamcmd.net，失败时回退到 SteamCMD。");
-            sources.Add(("api.steamcmd.net", api));
-            if (steamCmd != null) sources.Add(steamCmd.Value);
-        }
+
+        AppLog.Info("数据源顺序：" + string.Join(" → ", sources.Select(pair => pair.Name)) +
+                    (cachePath == null ? "（本机缓存未找到）" : $"（缓存：{cachePath}）"));
 
         return new BuildIdUpdateService(new CompositeBuildIdProvider(sources));
     }
@@ -253,16 +261,23 @@ public sealed partial class LibraryPage : Page
             var results = await _updateService.CheckAsync(targets, forceRefresh, progress);
             var errors = results.Count(result => result.State == BuildIdState.Error);
             var updates = results.Count(result => result.State == BuildIdState.UpdateAvailable);
+            var stale = results.Count(result => result.State == BuildIdState.SourceStale);
             foreach (var result in results.Where(r => r.State == BuildIdState.UpdateAvailable))
-                AppLog.Warning($"{result.Manifest.Name}（{result.Manifest.AppId}）需同步：{result.Message}");
+                AppLog.Warning($"{result.Manifest.Name}（{result.Manifest.AppId}）需同步：{result.Message}" +
+                               SourceSuffix(result));
+            foreach (var result in results.Where(r => r.State == BuildIdState.SourceStale))
+                AppLog.Warning($"{result.Manifest.Name}（{result.Manifest.AppId}）来源滞后，已跳过：{result.Message}" +
+                               SourceSuffix(result));
             foreach (var result in results.Where(r => r.State == BuildIdState.Error))
                 AppLog.Warning($"{result.Manifest.Name}（{result.Manifest.AppId}）检测失败：{result.Message}");
-            AppLog.Info($"检测完成：{results.Count} 个，{updates} 个可更新，{errors} 个失败。");
+            AppLog.Info($"检测完成：{results.Count} 个，{updates} 个可更新，{stale} 个来源滞后，{errors} 个失败。");
             ShowInfo("检测完成",
-                errors == 0
+                errors == 0 && stale == 0
                     ? $"{results.Count} 个配置完成检测，{updates} 个发现 BuildID 更新。"
-                    : $"{results.Count} 个配置完成检测，{updates} 个可更新，{errors} 个获取失败。请检查网络或 AppID。",
-                errors == 0 ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
+                    : $"{results.Count} 个配置完成检测，{updates} 个可更新" +
+                      (stale > 0 ? $"，{stale} 个来源滞后已跳过" : "") +
+                      (errors > 0 ? $"，{errors} 个获取失败。请检查网络或 AppID。" : "。"),
+                errors == 0 && stale == 0 ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
         }
         catch (Exception ex)
         {
@@ -339,6 +354,10 @@ public sealed partial class LibraryPage : Page
             UpdateSummary();
         }
     }
+
+    /// <summary>Append the data source and timestamp so stale-source rows are explainable.</summary>
+    private static string SourceSuffix(BuildIdCheckResult result) =>
+        string.IsNullOrWhiteSpace(result.Source) ? "" : $"（来源：{result.Source}）";
 
     private async Task<bool> ConfirmUpdateAsync(IReadOnlyList<ManifestRow> targets)
     {

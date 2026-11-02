@@ -8,5 +8,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />
+    <!-- Anonymous Steam network queries (public PICS data only). LGPL-2.1, see Assets/ThirdParty. -->
+    <PackageReference Include="SteamKit2" Version="3.4.0" />
   </ItemGroup>
 </Project>

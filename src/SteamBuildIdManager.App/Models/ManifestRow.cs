@@ -12,6 +12,7 @@ public sealed class ManifestRow : INotifyPropertyChanged
     private static readonly SolidColorBrush UpdateBrush = new(Color.FromArgb(255, 202, 80, 16));
     private static readonly SolidColorBrush ErrorBrush = new(Color.FromArgb(255, 196, 43, 28));
     private static readonly SolidColorBrush UnknownBrush = new(Color.FromArgb(255, 128, 128, 128));
+    private static readonly SolidColorBrush StaleBrush = new(Color.FromArgb(255, 176, 124, 0));
 
     public ManifestRow(AcfManifest manifest)
     {
@@ -21,6 +22,7 @@ public sealed class ManifestRow : INotifyPropertyChanged
     public AcfManifest Manifest { get; private set; }
     public string? LatestBuildId { get; private set; }
     public IReadOnlyDictionary<string, string>? LatestDepotManifests { get; private set; }
+    public string Source { get; private set; } = "";
     public BuildIdState State { get; private set; } = BuildIdState.Unknown;
     public string Message { get; private set; } = "尚未检测";
 
@@ -38,6 +40,7 @@ public sealed class ManifestRow : INotifyPropertyChanged
         BuildIdState.UpToDate => "已是最新",
         BuildIdState.UpdateAvailable => "发现更新",
         BuildIdState.Error => "检测失败",
+        BuildIdState.SourceStale => "来源滞后",
         _ => "未检测",
     };
 
@@ -46,6 +49,7 @@ public sealed class ManifestRow : INotifyPropertyChanged
         BuildIdState.UpToDate => "\uE73E",
         BuildIdState.UpdateAvailable => "\uE895",
         BuildIdState.Error => "\uE7BA",
+        BuildIdState.SourceStale => "\uE7BA",
         _ => "\uE946",
     };
 
@@ -54,6 +58,7 @@ public sealed class ManifestRow : INotifyPropertyChanged
         BuildIdState.UpToDate => UpToDateBrush,
         BuildIdState.UpdateAvailable => UpdateBrush,
         BuildIdState.Error => ErrorBrush,
+        BuildIdState.SourceStale => StaleBrush,
         _ => UnknownBrush,
     };
 
@@ -75,6 +80,7 @@ public sealed class ManifestRow : INotifyPropertyChanged
         Manifest = result.Manifest;
         LatestBuildId = result.LatestBuildId;
         LatestDepotManifests = result.LatestDepotManifests;
+        Source = result.Source;
         State = result.State;
         Message = result.Message;
         RaiseAll();
@@ -85,6 +91,7 @@ public sealed class ManifestRow : INotifyPropertyChanged
         Manifest = manifest;
         LatestBuildId = latestBuildId;
         LatestDepotManifests = null;
+        Source = "";
         State = BuildIdState.UpToDate;
         Message = $"已更新到 {latestBuildId}";
         RaiseAll();
@@ -95,6 +102,7 @@ public sealed class ManifestRow : INotifyPropertyChanged
         State = BuildIdState.Unknown;
         LatestBuildId = null;
         LatestDepotManifests = null;
+        Source = "";
         Message = "尚未检测";
         RaiseAll();
     }
@@ -104,6 +112,7 @@ public sealed class ManifestRow : INotifyPropertyChanged
     {
         LatestBuildId = other.LatestBuildId;
         LatestDepotManifests = other.LatestDepotManifests;
+        Source = other.Source;
         State = other.State;
         Message = other.Message;
         RaiseAll();
@@ -113,7 +122,7 @@ public sealed class ManifestRow : INotifyPropertyChanged
     {
         foreach (var name in new[]
                  {
-                     nameof(Manifest), nameof(LatestBuildId), nameof(State), nameof(Message),
+                     nameof(Manifest), nameof(LatestBuildId), nameof(State), nameof(Message), nameof(Source),
                      nameof(BuildId), nameof(LatestBuildIdDisplay), nameof(StatusText),
                      nameof(StatusGlyph), nameof(StatusBrush), nameof(CanUpdate), nameof(ToolTip),
                  })

@@ -8,7 +8,14 @@ public sealed record SteamAppInfo(
     string InstallDirectory,
     IReadOnlyDictionary<string, string> BranchBuildIds,
     IReadOnlyList<SteamDepotInfo> Depots,
-    IReadOnlyList<SteamLaunchInfo> LaunchOptions);
+    IReadOnlyList<SteamLaunchInfo> LaunchOptions)
+{
+    /// <summary>Human-readable origin of this snapshot, shown in the UI and the log.</summary>
+    public string Source { get; init; } = "";
+
+    /// <summary>When the snapshot was received (not when it was published).</summary>
+    public DateTimeOffset? RetrievedAt { get; init; }
+}
 
 public sealed record SteamPlatformFilter(string OperatingSystems, string Architecture, string Language);
 

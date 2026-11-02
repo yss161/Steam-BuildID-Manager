@@ -1,0 +1,9 @@
+SteamKit2 is used by Steam BuildID Manager to query public Steam product information
+through an anonymous Steam network session.
+
+SteamKit2 is a community protocol library, not an official Valve SDK.
+It is licensed under the GNU Lesser General Public License 2.1 (see LGPL-2.1.txt).
+The library is consumed as an unmodified NuGet package, so it can be replaced by
+the user with a compatible build as allowed by the LGPL.
+
+Project: https://github.com/SteamRE/SteamKit

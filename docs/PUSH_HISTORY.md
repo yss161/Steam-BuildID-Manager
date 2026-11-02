@@ -1,5 +1,13 @@
 # 推送记录
 
+## 2026-11-02 17:10:00 +08:00
+
+1. 推送人员：圆鲨鲨
+2. 目标分支：main
+3. 实现内容：版本升级到 1.7.0；整合原项目 v3.2.1 的数据获取改造——新增本机 Steam 缓存读取（appinfo.vdf 格式 39/40/41）与 SteamKit2 3.4.0 匿名直连 PICS，默认取值顺序改为「本机缓存 → Steam 直连 → SteamCMD → api.steamcmd.net」；新增 SteamUpdateInfoResolver 多源仲裁（完整快照、剔除冲突、取最高 BuildID、不跨源拼接）与 SteamManifestUpdateGuard 版本证据校验；新增“来源滞后”状态，不再把落后于 Steam 已知版本的数据源显示为可一键修复。
+4. 验证结果：150 项核心回归测试通过（新增 15 项，覆盖守卫、仲裁、缓存格式拒绝与冲突诊断）；真机实测本机缓存解析 AppID 4706890 得到 BuildID 26373441 与 Manifest 4548954592484496523，与 Steam 一致；SteamKit2 匿名直连实测成功返回 4706890 与 730 的公开产品信息；Core 与 App 构建通过，发布目录包含 SteamKit2.dll 及 LGPL 许可文件。
+5. 说明：SteamKit2 为社区协议库（LGPL-2.1），以未修改 NuGet 包引用并附带许可文件；本机 nuget.org 解析被拦截，本地使用华为云镜像还原，CI 仍走官方源。
+
 ## 2026-10-27 23:20:00 +08:00
 
 1. 推送人员：圆鲨鲨
@@ -28,10 +36,3 @@
 3. 实现内容：版本升级到 1.3.2；修复“更新后再打开 Steam 又变回去”。对照原项目 SteamCN-GameLauncher 的备份与改写结果，确认差异在更新状态字段：原项目把 `StateFlags` 直接写为 4、`DownloadType` 写为 1、`BytesToDownload`/`BytesDownloaded`/`BytesToStage`/`BytesStaged`/`StagingSize` 清零、`TargetBuildID` 与 `ScheduledAutoUpdate` 归零。本版照此整体复位，替换 1.3.1 仅清 bit 2 的做法（518 → 516 仍保留 512 更新暂停位，Steam 会继续下载并覆盖 ACF）。检测逻辑同步改为识别整套未复位状态并列出具体字段。
 4. 验证结果：117 项核心回归测试通过；对真实 `appmanifest_4706890.acf` 做只读转换，输出 `StateFlags 518→4`、`DownloadType 4→1`、`BytesToDownload 2959529119→0`、`TargetBuildID 26236512→0`，字段集合与原项目生成结果一致；Core 与 App 均编译通过。
 5. 说明：本机 nuget.org 解析被拦截，改用华为云 NuGet 镜像完成本地还原；CI 仍走官方源。本机沙箱无法写入 `%LocalAppData%\SteamBuildIDManager\backups`，UI 写入闭环由单元测试与真实 ACF 只读转换验证。
-## 2026-10-21 13:30:00 +08:00
-
-1. 推送人员：圆鲨鲨
-2. 目标分支：main
-3. 实现内容：版本升级到 1.3.1；修复“软件内更新 BuildID 后 Steam 仍提示需要更新”。更新流程从只改 `buildid` 扩展为同步 `InstalledDepots` 内每个 Depot 的 `manifest`、补齐缺失 Depot、清除 `StateFlags` 的“需要更新”标志位（bit 2）并把 `UpdateResult` 归零；检测逻辑同时比对 BuildID、Depot Manifest 与 StateFlags。
-4. 验证结果：115 项核心回归测试通过；用真实 228980 配置复现并确认修复——其 `StateFlags` 为 6（含需要更新位）、BuildID 与公开分支一致，旧逻辑判为“已是最新”导致 Steam 继续提示更新，新逻辑正确标记为可修复；对真实 ACF 做只读转换验证 `StateFlags 6 → 4`、`UpdateResult → 0`、Depot Manifest 全部对齐。
-5. 说明：更新写入前需完全退出 Steam；本机沙箱限制了对 `%LocalAppData%\SteamBuildIDManager\backups` 的写入，写入链路由单元测试与真实文件的只读转换验证。

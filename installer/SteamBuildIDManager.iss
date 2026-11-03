@@ -3,7 +3,7 @@
 ; The publish folder must exist first (see README).
 
 #define MyAppName "Steam BuildID 管理器"
-#define MyAppVersion "1.7.0"
+#define MyAppVersion "1.8.0"
 #define MyAppPublisher "yss161"
 #define MyAppURL "https://github.com/yss161/Steam-BuildID-Manager"
 #define MyAppExeName "SteamBuildIDManager.exe"
@@ -37,7 +37,7 @@ CloseApplications=yes
 CloseApplicationsFilter=SteamBuildIDManager.exe
 RestartApplications=no
 LicenseFile=..\LICENSE
-VersionInfoVersion=1.7.0.0
+VersionInfoVersion=1.8.0.0
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription={#MyAppName} 安装程序
 VersionInfoProductName={#MyAppName}
@@ -52,6 +52,13 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "..\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+; The SteamCMD bootstrap ships inside publish\steamcmd and is installed to {app}\steamcmd.
+; It is only a read-only template: on first use the app copies it into
+; %LocalAppData%\SteamBuildIDManager\steamcmd because SteamCMD rewrites itself on start.
+#if !FileExists(AddBackslash(SourcePath) + "..\publish\steamcmd\steamcmd.exe")
+  #error 缺少内置 SteamCMD：请先运行 installer\fetch-steamcmd.ps1，再把 steamcmd.exe 复制到 publish\steamcmd
+#endif
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

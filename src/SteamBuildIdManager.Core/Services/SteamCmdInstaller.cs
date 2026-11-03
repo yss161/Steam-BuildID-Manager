@@ -39,11 +39,82 @@ public sealed class SteamCmdInstaller
 
     public static string DefaultExecutablePath => Path.Combine(DefaultDirectory, "steamcmd.exe");
 
+    /// <summary>
+    /// Folder next to the application that the installer fills with the bundled bootstrap.
+    /// The bundled copy is read-only under Program Files, so it is only a template.
+    /// </summary>
+    public static string BundledDirectory => Path.Combine(AppContext.BaseDirectory, "steamcmd");
+
+    public static string BundledExecutablePath => Path.Combine(BundledDirectory, "steamcmd.exe");
+
+    /// <summary>True when the installer shipped a SteamCMD payload with this build.</summary>
+    public static bool HasBundledCopy => File.Exists(BundledExecutablePath);
+
     public string InstallDirectory => _directory;
 
     public string ExecutablePath => Path.Combine(_directory, "steamcmd.exe");
 
     public bool IsInstalled => File.Exists(ExecutablePath);
+
+    /// <summary>
+    /// Copy the bundled bootstrap into the writable data folder. SteamCMD rewrites itself on its
+    /// first run, so it cannot live in Program Files; this keeps the install working with no
+    /// network access while still allowing self-update.
+    /// </summary>
+    public string? DeployBundledCopy(IProgress<string>? progress = null)
+    {
+        if (!HasBundledCopy) return null;
+        return DeployBundledCopyFrom(BundledDirectory, progress);
+    }
+
+    /// <summary>Deploy a specific template folder; returns null when it holds no steamcmd.exe.</summary>
+    public string? DeployBundledCopyFrom(string templateDirectory, IProgress<string>? progress = null)
+    {
+        if (string.IsNullOrWhiteSpace(templateDirectory)
+            || !File.Exists(Path.Combine(templateDirectory, "steamcmd.exe")))
+            return null;
+
+        Directory.CreateDirectory(_directory);
+        progress?.Report("正在解压内置 SteamCMD…");
+
+        foreach (var source in Directory.EnumerateFiles(templateDirectory, "*", SearchOption.AllDirectories))
+        {
+            var relative = Path.GetRelativePath(templateDirectory, source);
+            var destination = Path.Combine(_directory, relative);
+            var destinationFolder = Path.GetDirectoryName(destination);
+            if (!string.IsNullOrEmpty(destinationFolder)) Directory.CreateDirectory(destinationFolder);
+
+            // SteamCMD updates its own files, so always refresh from the bundled template.
+            try
+            {
+                File.Copy(source, destination, overwrite: true);
+            }
+            catch (IOException ex)
+            {
+                throw new SteamAppInfoException($"无法写入 SteamCMD（{destination}）：{ex.Message}", ex);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                throw new SteamAppInfoException($"没有权限写入 SteamCMD（{destination}）：{ex.Message}", ex);
+            }
+        }
+
+        if (!File.Exists(ExecutablePath))
+            throw new SteamAppInfoException("内置 SteamCMD 部署失败：找不到 steamcmd.exe。");
+
+        AppLog.Success($"已从安装包内置副本部署 SteamCMD 到 {ExecutablePath}");
+        progress?.Report("SteamCMD 已就绪。");
+        return ExecutablePath;
+    }
+
+    /// <summary>Deploy the bundled copy when present, otherwise download it.</summary>
+    public async Task<string> EnsureAvailableAsync(IProgress<string>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (IsInstalled) return ExecutablePath;
+        if (HasBundledCopy) return DeployBundledCopy(progress)!;
+        return await InstallOrUpdateAsync(progress, cancellationToken).ConfigureAwait(false);
+    }
 
     /// <summary>
     /// Download and extract the official bootstrap, trying each mirror in turn. SteamCMD still runs

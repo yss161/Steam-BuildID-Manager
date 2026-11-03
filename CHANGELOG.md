@@ -1,5 +1,23 @@
 # 更新记录
 
+## v1.8.0 — 2026-11-03
+
+### 更新功能
+
+1. SteamCMD 内置到安装包：安装时把 Valve 官方 `steamcmd.exe` 一并安装到 `{app}\steamcmd`，用户无需再单独下载。
+2. 首次检测时自动把内置副本部署到 `%LocalAppData%\SteamBuildIDManager\steamcmd`。该目录可写，SteamCMD 才能完成自更新；`Program Files` 下的模板保持只读。
+3. 新增 `SteamCmdInstaller.DeployBundledCopy` 与 `SteamCmdLocator.ResolveOrDeploy`：优先使用可写部署，缺失时从内置副本部署，再无则回退到下载。
+4. 部署覆盖为幂等刷新：SteamCMD 会改写自身文件，每次部署都以内置模板为准，避免自更新失败后留下损坏副本。
+5. 部署失败（只读目录、权限不足）不再中断检测，只记录警告并继续使用其余数据源。
+6. 设置页状态区分“已部署”“内置可用待部署”“未检测到”三种情形，并说明可写目录位置。
+7. 新增 6 项回归测试，覆盖内置副本部署、整目录复制、幂等刷新、删除与无 payload 时的跳过，核心测试总数增至 156 项。
+
+### 说明
+
+1. 内置的只是 Valve 的引导程序，SteamCMD 首次运行仍会联网自更新；内置的好处是不用再手动找下载地址。
+2. SteamCMD 版权归 Valve，不适用本项目的 MIT 许可证，见 `Assets/ThirdParty/SteamCMD/NOTICE.txt`。
+3. 若以管理员身份启动且程序未签名，Windows 仍会提示“无法验证发布者”。这与内置信无关，需要代码签名证书才能彻底消除。
+
 ## v1.7.0 — 2026-11-02
 
 ### 更新功能

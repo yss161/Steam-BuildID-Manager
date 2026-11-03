@@ -21,7 +21,7 @@
    & "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" installer\SteamBuildIDManager.iss
    ```
 
-产物：`artifacts\installer\Steam-BuildID-Manager-Setup-1.7.0.exe`。
+产物：`artifacts\installer\Steam-BuildID-Manager-Setup-1.8.0.exe`。
 
 ## 安装行为
 

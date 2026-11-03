@@ -324,8 +324,39 @@ public static class SteamCmdLocator
         return FromPath();
     }
 
+    /// <summary>
+    /// Resolve a usable steamcmd.exe, deploying the copy bundled with the installer when the
+    /// writable deployment is missing. Returns null when neither exists.
+    /// </summary>
+    public static string? ResolveOrDeploy(string? configuredPath, string? steamInstallPath = null,
+        IProgress<string>? progress = null)
+    {
+        var resolved = Resolve(configuredPath, steamInstallPath);
+        if (resolved != null) return resolved;
+
+        if (!SteamCmdInstaller.HasBundledCopy) return null;
+
+        try
+        {
+            return new SteamCmdInstaller().DeployBundledCopy(progress);
+        }
+        catch (Exception ex) when (ex is SteamAppInfoException or IOException
+                                       or UnauthorizedAccessException)
+        {
+            // A read-only or blocked data folder must not break detection: the app simply
+            // continues with the remaining sources.
+            AppLog.Warning("部署内置 SteamCMD 失败：" + ex.Message);
+            return null;
+        }
+    }
+
     public static IEnumerable<string> Candidates(string? steamInstallPath = null)
     {
+        // Only the writable deployment is a candidate: the bundled template lives next to the
+        // executable (read-only under Program Files) and cannot self-update, so ResolveOrDeploy
+        // copies it into the data folder instead of running it in place.
+        yield return SteamCmdInstaller.DefaultExecutablePath;
+
         if (!string.IsNullOrWhiteSpace(steamInstallPath))
             yield return Path.Combine(steamInstallPath, "steamcmd", "steamcmd.exe");
 

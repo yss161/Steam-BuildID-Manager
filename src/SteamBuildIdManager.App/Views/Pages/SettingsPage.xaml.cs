@@ -96,10 +96,12 @@ public sealed partial class SettingsPage : Page
         };
 
         SteamCmdPathBox.Text = _settings.SteamCmdPath;
-        var resolved = SteamCmdLocator.Resolve(_settings.SteamCmdPath, _settings.SteamInstallPath);
-        SteamCmdStatusText.Text = resolved == null
-            ? "未检测到 steamcmd.exe；选择“仅 SteamCMD”时会自动回退到在线接口。"
-            : $"已找到：{resolved}";
+        var resolved = SteamCmdLocator.ResolveOrDeploy(_settings.SteamCmdPath, _settings.SteamInstallPath);
+        SteamCmdStatusText.Text = resolved != null
+            ? $"已找到：{resolved}"
+            : SteamCmdInstaller.HasBundledCopy
+                ? "安装包已内置 SteamCMD，首次检测时会自动部署到用户目录（无需联网下载）。"
+                : "未检测到 steamcmd.exe；选择“仅 SteamCMD”时会自动回退到在线接口。";
         RefreshSteamCmdButtons();
     }
 
@@ -124,12 +126,16 @@ public sealed partial class SettingsPage : Page
 
     private void DetectSteamCmd_Click(object sender, RoutedEventArgs e)
     {
-        var resolved = SteamCmdLocator.Resolve(_settings.SteamCmdPath, _settings.SteamInstallPath);
+        var resolved = SteamCmdLocator.ResolveOrDeploy(_settings.SteamCmdPath, _settings.SteamInstallPath);
         if (resolved == null)
         {
-            SteamCmdStatusText.Text = "未检测到 steamcmd.exe，请手动选择或改用“仅在线接口”。";
-            ShowInfo("未检测到 SteamCMD",
-                "可从 Valve 下载 steamcmd.zip 解压后，点击“浏览”指定 steamcmd.exe。",
+            SteamCmdStatusText.Text = SteamCmdInstaller.HasBundledCopy
+                ? "内置 SteamCMD 部署失败，请检查用户目录写入权限。"
+                : "未检测到 steamcmd.exe，请手动选择或改用“仅在线接口”。";
+            ShowInfo("未检测到可用的 SteamCMD",
+                SteamCmdInstaller.HasBundledCopy
+                    ? $"安装包自带 SteamCMD，但无法写入 {SteamCmdInstaller.DefaultDirectory}。请检查该目录权限，或点“浏览”指定其他位置。"
+                    : "可从 Valve 下载 steamcmd.zip 解压后，点击“浏览”指定 steamcmd.exe。",
                 InfoBarSeverity.Warning);
             return;
         }
@@ -149,7 +155,7 @@ public sealed partial class SettingsPage : Page
 
     private void RefreshSteamCmdButtons()
     {
-        var installed = new SteamCmdInstaller().IsInstalled;
+        var installed = new SteamCmdInstaller().IsInstalled || SteamCmdInstaller.HasBundledCopy;
         UpdateSteamCmdButton.IsEnabled = installed;
         DeleteSteamCmdButton.IsEnabled = installed;
     }
@@ -246,7 +252,7 @@ public sealed partial class SettingsPage : Page
 
     private async void TestSteamCmd_Click(object sender, RoutedEventArgs e)
     {
-        var path = SteamCmdLocator.Resolve(
+        var path = SteamCmdLocator.ResolveOrDeploy(
             string.IsNullOrWhiteSpace(SteamCmdPathBox.Text) ? _settings.SteamCmdPath : SteamCmdPathBox.Text,
             _settings.SteamInstallPath);
         if (path == null)

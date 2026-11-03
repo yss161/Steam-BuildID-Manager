@@ -1,0 +1,10 @@
+SteamCMD (steamcmd.exe) is bundled with the installer as Valve's unmodified bootstrap.
+
+Source: https://media.steampowered.com/client/installer/steamcmd.zip
+Copyright (C) Valve Corporation. SteamCMD is distributed by Valve under the
+Steam Subscriber Agreement and the SteamCMD documentation; it is not covered
+by this project's MIT license.
+
+SteamCMD is used only to read public app_info output (+app_info_print).
+On its first run SteamCMD downloads its own binaries and updates itself, so
+the bundled copy is a starting point rather than a fixed version.

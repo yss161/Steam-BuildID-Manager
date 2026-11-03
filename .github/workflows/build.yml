@@ -58,6 +58,13 @@ jobs:
           -o publish
           --no-restore
 
+      - name: Bundle SteamCMD into the package
+        shell: pwsh
+        run: |
+          pwsh -File installer/fetch-steamcmd.ps1
+          New-Item -ItemType Directory -Path "publish/steamcmd" -Force | Out-Null
+          Copy-Item "installer/steamcmd/*" -Destination "publish/steamcmd" -Recurse -Force
+
       - name: Verify publish output
         shell: pwsh
         run: |
@@ -66,6 +73,9 @@ jobs:
           }
           if (-not (Get-ChildItem "publish" -Filter "*.pri")) {
             throw "resources.pri was not produced; WinUI would fail to start."
+          }
+          if (-not (Test-Path "publish/steamcmd/steamcmd.exe")) {
+            throw "The bundled SteamCMD payload is missing."
           }
 
       - name: Create portable zip
@@ -123,6 +133,7 @@ jobs:
             -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw "Installer exited with code $($install.ExitCode)." }
           if (-not (Test-Path (Join-Path $dir "SteamBuildIDManager.exe"))) { throw "Installed exe is missing." }
+          if (-not (Test-Path (Join-Path $dir "steamcmd\steamcmd.exe"))) { throw "The installed bundle is missing the SteamCMD payload." }
           if (-not (Test-Path (Join-Path $dir "SteamBuildIDManager.pri"))) { throw "Installed PRI is missing." }
 
           # PrivilegesRequired=admin must register the app machine-wide, not per user.

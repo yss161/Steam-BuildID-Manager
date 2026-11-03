@@ -12,18 +12,19 @@
 
 1. **扫描 Steam 库**：自动读取 `steamapps\appmanifest_*.acf`，显示游戏名称、AppID、当前 BuildID、安装目录和库位置。
 2. **BuildID 更新检测**：从多个来源读取 `public` 分支，同时比较 `buildid`、每个 Depot 的 `manifest` 和 `StateFlags` 更新标志，标记“已是最新 / 发现更新 / 来源滞后 / 检测失败”。
-3. **多数据源（四层）**：默认按「本机 Steam 缓存 → Steam 直连（SteamKit2 匿名 PICS）→ SteamCMD → api.steamcmd.net」取值，某个来源失败会自动回退，且 5 分钟内不再重试。设置页可切换优先级，支持 SteamCMD 一键安装/更新/删除，并显示每个配置实际使用的来源与查询时间。
-4. **版本证据校验**：写入前比对 Steam 自己记录的 `TargetBuildID` 与已安装 BuildID。若数据源落后于 Steam 已知版本，会标记为“来源滞后”并拒绝写入，避免把 Steam 的更新意图抹掉后又被覆盖（这是“更新后又变回去”的根因）。
-5. **一键更新 BuildID**：支持单个更新和全部更新。同步 `buildid`、清空 `TargetBuildID`、刷新每个 Depot 的 `manifest`、清除 `StateFlags` 的“需要更新”标志，其余字段、缩进和换行符保持不变，更新后 Steam 不再提示更新。
-6. **自动备份**：每次写入前把原 ACF 备份到 `%LocalAppData%\SteamBuildIDManager\backups\<AppID>\`，默认保留最近 5 份。
-7. **新建 / 重建配置**：填写 AppID 后自动获取名称、安装目录、BuildID、Depot、启动 EXE 候选和 Steam 占位文件名，创建空占位 EXE 并写入 ACF，同时生成可粘贴到 Steam 启动选项的命令。
-8. **Steam 路径探测**：读取注册表和 `libraryfolders.vdf`，自动发现 Steam 安装目录和所有库文件夹，也支持手动添加。
-9. **本地账号读取**：从 `config\loginusers.vdf` 读取本机登录过的账号，按 `MostRecent` / `AutoLogin` / 时间排序，自动填充当前账号的 SteamID64；多账号时可弹窗选择，文件缺失时从 `userdata` 的 SteamID32 换算。
-10. **外观设置**：主题支持跟随系统 / 浅色 / 深色；可选择本地图片作为窗口背景，并调整 10%–100% 不透明度。
-11. **管理员启动**：设置页可开启“以管理员身份启动”，之后每次启动都会自动请求 UAC 提权，也可随时“立即以管理员重启”；取消 UAC 时仍以标准权限继续运行，不会崩溃。
-12. **获取游戏信息**：输入 AppID 即可查看显示名称、安装目录名、BuildID、主 DepotID、主 Manifest、Steam 占位文件名、启动 EXE 和全部 Depot；确认后可一键「创建为新配置」直接生成 ACF 与占位文件。
-13. **运行日志**：页面底部实时显示扫描、检测、更新和网络请求过程，可清空或打开日志文件；日志同时写入 `%LocalAppData%\SteamBuildIDManager\logs\app.log`。
-14. **安全保护**：默认只列出 `SizeOnDisk = 0` 的占位配置；Steam 正在运行时给出警告；检测到 ACF 已被其他程序修改时拒绝覆盖。
+3. **多数据源（四层）**：默认按「本机 Steam 缓存 → Steam 直连（SteamKit2 匿名 PICS）→ SteamCMD → api.steamcmd.net」取值，某个来源失败会自动回退，且 5 分钟内不再重试。设置页可切换优先级，并显示每个配置实际使用的来源与查询时间。
+4. **内置 SteamCMD**：安装包直接携带 Valve 官方 `steamcmd.exe`，首次检测时自动部署到 `%LocalAppData%\SteamBuildIDManager\steamcmd`，无需手动下载；设置页仍提供「更新 / 删除 / 测试 / 打开目录」。
+5. **版本证据校验**：写入前比对 Steam 自己记录的 `TargetBuildID` 与已安装 BuildID。若数据源落后于 Steam 已知版本，会标记为“来源滞后”并拒绝写入，避免把 Steam 的更新意图抹掉后又被覆盖（这是“更新后又变回去”的根因）。
+6. **一键更新 BuildID**：支持单个更新和全部更新。同步 `buildid`、清空 `TargetBuildID`、刷新每个 Depot 的 `manifest`、清除 `StateFlags` 的“需要更新”标志，其余字段、缩进和换行符保持不变，更新后 Steam 不再提示更新。
+7. **自动备份**：每次写入前把原 ACF 备份到 `%LocalAppData%\SteamBuildIDManager\backups\<AppID>\`，默认保留最近 5 份。
+8. **新建 / 重建配置**：填写 AppID 后自动获取名称、安装目录、BuildID、Depot、启动 EXE 候选和 Steam 占位文件名，创建空占位 EXE 并写入 ACF，同时生成可粘贴到 Steam 启动选项的命令。
+9. **Steam 路径探测**：读取注册表和 `libraryfolders.vdf`，自动发现 Steam 安装目录和所有库文件夹，也支持手动添加。
+10. **本地账号读取**：从 `config\loginusers.vdf` 读取本机登录过的账号，按 `MostRecent` / `AutoLogin` / 时间排序，自动填充当前账号的 SteamID64；多账号时可弹窗选择，文件缺失时从 `userdata` 的 SteamID32 换算。
+11. **外观设置**：主题支持跟随系统 / 浅色 / 深色；可选择本地图片作为窗口背景，并调整 10%–100% 不透明度。
+12. **管理员启动**：设置页可开启“以管理员身份启动”，之后每次启动都会自动请求 UAC 提权，也可随时“立即以管理员重启”；取消 UAC 时仍以标准权限继续运行，不会崩溃。
+13. **获取游戏信息**：输入 AppID 即可查看显示名称、安装目录名、BuildID、主 DepotID、主 Manifest、Steam 占位文件名、启动 EXE 和全部 Depot；确认后可一键「创建为新配置」直接生成 ACF 与占位文件。
+14. **运行日志**：页面底部实时显示扫描、检测、更新和网络请求过程，可清空或打开日志文件；日志同时写入 `%LocalAppData%\SteamBuildIDManager\logs\app.log`。
+15. **安全保护**：默认只列出 `SizeOnDisk = 0` 的占位配置；Steam 正在运行时给出警告；检测到 ACF 已被其他程序修改时拒绝覆盖。
 
 ## 界面与使用流程
 
@@ -57,21 +58,21 @@ BuildIdUpdateService ──► api.steamcmd.net/v1/info/<AppID> ──► public
 
 仓库自带 [GitHub Actions 工作流](.github/workflows/build.yml)：
 
-1. 每次推送或提交 Pull Request 时，自动运行 150 项核心回归测试。
+1. 每次推送或提交 Pull Request 时，自动运行 156 项核心回归测试。
 2. 测试通过后，在 `windows-latest` 上以 `win-x64` 自包含方式发布 WinUI 3 应用。
 3. 用 Inno Setup 生成需要管理员权限的全机安装包，并在 CI 中执行静默安装、启动文件检查和静默卸载冒烟测试。
-4. 便携版 `Steam-BuildID-Manager-win-x64.zip` 和安装版 `Steam-BuildID-Manager-Setup-1.7.0.exe` 都会上传到 Actions Artifacts。
+4. 便携版 `Steam-BuildID-Manager-win-x64.zip` 和安装版 `Steam-BuildID-Manager-Setup-1.8.0.exe` 都会上传到 Actions Artifacts。
 5. 推送 `v*` 标签时，两个产物会自动附加到 GitHub Release。
 
 下载方式：
 
-2. **安装版**：从 [Releases](https://github.com/yss161/Steam-BuildID-Manager/releases) 下载 `Steam-BuildID-Manager-Setup-1.7.0.exe`。
-3. **便携版**：从 Releases 下载 `Steam-BuildID-Manager-win-x64.zip`，解压后直接运行。
-4. **最新构建**：打开 [Actions](https://github.com/yss161/Steam-BuildID-Manager/actions/workflows/build.yml)，选择最近一次成功的 `build`，在页面底部下载安装版或便携版。
+3. **安装版**：从 [Releases](https://github.com/yss161/Steam-BuildID-Manager/releases) 下载 `Steam-BuildID-Manager-Setup-1.8.0.exe`。
+4. **便携版**：从 Releases 下载 `Steam-BuildID-Manager-win-x64.zip`，解压后直接运行。
+5. **最新构建**：打开 [Actions](https://github.com/yss161/Steam-BuildID-Manager/actions/workflows/build.yml)，选择最近一次成功的 `build`，在页面底部下载安装版或便携版。
 
 ## 安装版
 
-1. 双击 `Steam-BuildID-Manager-Setup-1.7.0.exe`，安装程序会自动请求管理员权限，在 UAC 提示中选择“是”即可。
+1. 双击 `Steam-BuildID-Manager-Setup-1.8.0.exe`，安装程序会自动请求管理员权限，在 UAC 提示中选择“是”即可。
 2. 默认安装到 `C:\Program Files\SteamBuildIDManager`；开始菜单快捷方式对所有用户可见，桌面快捷方式默认不勾选。
 3. 安装程序会检测并关闭正在运行的旧版本，安装完成后可直接启动。
 4. 卸载需要管理员权限，入口在 Windows“设置 → 应用 → 已安装的应用”，不会删除用户设置和 ACF 备份。
@@ -118,10 +119,10 @@ installer/                      Inno Setup 安装包脚本与简体中文语言�
 
 默认按以下顺序取值，前一个不可用或没有该 App 的数据时自动尝试下一个：
 
-1. **本机 Steam 缓存**（`appcacheppinfo.vdf`）：解析格式 39/40/41，离线可用，反映 Steam 客户端自己认为的版本。
-2. **Steam 直连**（SteamKit2 3.4.0 匿名 PICS）：向 Steam 查询公开产品信息，每次独立会话、25 秒超时，使用进程内随机机器标识，不读取也不上传真实硬件 ID。
-3. **SteamCMD**：调用官方 `app_info_print`，可在设置页一键安装。
-4. **api.steamcmd.net**：第三方镜像，作为最后兜底，界面会标注它不保证实时。
+2. **本机 Steam 缓存**（`appcacheppinfo.vdf`）：解析格式 39/40/41，离线可用，反映 Steam 客户端自己认为的版本。
+3. **Steam 直连**（SteamKit2 3.4.0 匿名 PICS）：向 Steam 查询公开产品信息，每次独立会话、25 秒超时，使用进程内随机机器标识，不读取也不上传真实硬件 ID。
+4. **SteamCMD**：调用官方 `app_info_print`，可在设置页一键安装。
+5. **api.steamcmd.net**：第三方镜像，作为最后兜底，界面会标注它不保证实时。
 
 仲裁规则：每个候选必须是完整快照（BuildID + 名称 + 安装目录 + 启动项 + 全部适用 Depot Manifest 齐全），且不能与 Steam 记录的版本证据冲突；剩余候选取 BuildID 最大者，绝不跨来源拼接字段。
 
@@ -158,6 +159,9 @@ A：不会。程序只记录图片的绝对路径并直接读取；图片被移�
 
 **Q：运行时弹出“Windows 已保护你的电脑”怎么办？**
 A：这是 SmartScreen 对“带网络来源标记且未签名”的程序提示。安装版在安装完成时会自动解除文件锁定，正常安装后不会再弹；便携版可先右键 `Unblock.cmd` → 以管理员身份运行（或双击），再启动主程序。要从根本上消除提示需要代码签名证书，程序本身无法绕过。
+
+**Q：安装包需要联网下载 SteamCMD 吗？**
+A：不需要。安装包已内置 Valve 官方 `steamcmd.exe`，首次检测时会自动部署到 `%LocalAppData%\SteamBuildIDManager\steamcmd`。该副本仍会在首次运行时联网做自更新（Valve 的机制），若网络受限请改用「仅在线接口」，或先手动解压 `steamcmd.zip` 再用“浏览”指定路径。
 
 **Q：SteamCMD 下载失败怎么办？**
 A：程序会依次尝试 `media.steampowered.com` 与 `steamcdn-a.akamaihd.net`，单个地址 90 秒超时后自动换下一个。都被拦截时可先用“仅在线接口”，或手动下载 `steamcmd.zip` 解压后用“浏览”指定路径。

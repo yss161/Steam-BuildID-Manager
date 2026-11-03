@@ -994,6 +994,49 @@ using (var bogus = new MemoryStream(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 }))
 Check(SteamAppCacheReader.FindCachePath(null) == null, "cache lookup without a Steam path returns null");
 
 
+// ── Bundled SteamCMD deployment ──────────────────────────────────────────
+var bundleRoot = Path.Combine(Path.GetTempPath(), "sbim-bundle-" + Guid.NewGuid().ToString("N"));
+try
+{
+    var bundledTemplate = Path.Combine(bundleRoot, "bundle");
+    Directory.CreateDirectory(bundledTemplate);
+    // A stand-in for the payload the installer ships next to the executable.
+    await File.WriteAllBytesAsync(Path.Combine(bundledTemplate, "steamcmd.exe"), new byte[] { 77, 90, 1, 2 });
+    Directory.CreateDirectory(Path.Combine(bundledTemplate, "public"));
+    await File.WriteAllTextAsync(Path.Combine(bundledTemplate, "public", "note.txt"), "payload");
+
+    var deployedRoot = Path.Combine(bundleRoot, "data", "steamcmd");
+    var deployer = new SteamCmdInstaller(directory: deployedRoot);
+    Check(!deployer.IsInstalled, "a fresh install has no SteamCMD yet");
+
+    // Deployment copies the whole template tree into the writable data folder.
+    var deployed = deployer.DeployBundledCopyFrom(bundledTemplate);
+    Check(deployed != null && File.Exists(deployed) && deployer.IsInstalled,
+        "the bundled SteamCMD is deployed into the writable data folder");
+    Check(File.Exists(Path.Combine(deployedRoot, "public", "note.txt")),
+        "deploying the bundled SteamCMD copies its whole folder tree");
+
+    // Re-deploying refreshes the files: SteamCMD rewrites itself, so the template must win.
+    await File.WriteAllBytesAsync(deployed!, new byte[] { 9, 9 });
+    deployer.DeployBundledCopyFrom(bundledTemplate);
+    var refreshed = await File.ReadAllBytesAsync(deployed!);
+    Check(refreshed.Length == 4 && refreshed[0] == 77,
+        "redeploying refreshes a self-updated SteamCMD from the bundled template");
+
+    deployer.Delete();
+    Check(!Directory.Exists(deployedRoot), "deleting the deployed SteamCMD removes its folder");
+
+    // Without a payload the deployer reports nothing instead of throwing.
+    var emptyRoot = Path.Combine(bundleRoot, "empty");
+    Directory.CreateDirectory(emptyRoot);
+    Check(new SteamCmdInstaller(directory: deployedRoot).DeployBundledCopyFrom(emptyRoot) == null,
+        "deployment is skipped when no bundled payload exists");
+}
+finally
+{
+    try { if (Directory.Exists(bundleRoot)) Directory.Delete(bundleRoot, recursive: true); } catch { }
+}
+
 if (args.Contains("--live"))
 {
     var live = await new SteamAppInfoService().GetAppInfoAsync("4162040");

@@ -161,7 +161,7 @@ public sealed partial class LibraryPage : Page
         var cache = cachePath == null ? null : new SteamAppCacheBuildIdProvider(cachePath);
         var live = new SteamLiveBuildIdProvider();
 
-        var steamCmdPath = SteamCmdLocator.Resolve(settings.SteamCmdPath, settings.SteamInstallPath);
+        var steamCmdPath = SteamCmdLocator.ResolveOrDeploy(settings.SteamCmdPath, settings.SteamInstallPath);
         var steamCmd = steamCmdPath == null
             ? null
             : new SteamCmdBuildIdProvider(new SteamCmdService(steamCmdPath));

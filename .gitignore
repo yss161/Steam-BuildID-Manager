@@ -38,3 +38,5 @@ backups/
 Thumbs.db
 Desktop.ini
 .DS_Store
+# Bundled SteamCMD payload (fetched by installer/fetch-steamcmd.ps1)
+installer/steamcmd/

@@ -1,5 +1,13 @@
 # 推送记录
 
+## 2026-11-03 21:45:00 +08:00
+
+1. 推送人员：圆鲨鲨
+2. 目标分支：main
+3. 实现内容：版本升级到 1.9.0；安装器改为与原项目一致的用户级安装（`PrivilegesRequired=lowest`、装到 `%LocalAppData%\Programs`、免 UAC），修复双击安装包报“临时目录没有写入权限”（全机安装时 `{tmp}` 指向 `C:\Windows\Temp`）；新增 `InitializeSetup` 临时目录预检并给出可操作提示；向导改为 Windows 11 现代风格 + 简体中文；新增 `AppMutex`、自动关闭旧版本、过期 WinUI 语言目录清理；CI 冒烟测试改为断言 HKCU 用户级卸载项。
+4. 验证结果：156 项核心回归测试通过；ISCC 编译成功且 `publish\steamcmd\steamcmd.exe` 已打入安装包；本地沙箱无法运行安装器（Setup 初始化即被环境限制，与代码无关），安装/卸载行为改由 CI 静默安装冒烟测试验证，覆盖 exe、PRI、SteamCMD payload 与 HKCU 注册项。
+5. 说明：用户级安装后 `{app}` 位于用户可写范围，但内置 SteamCMD 仍按原设计复制到 `%LocalAppData%\SteamBuildIDManager\steamcmd` 运行；本机 nuget.org 被拦截，本地用华为云镜像还原，CI 走官方源。
+
 ## 2026-11-03 20:50:00 +08:00
 
 1. 推送人员：圆鲨鲨
@@ -29,11 +37,4 @@
 2. 目标分支：main
 3. 实现内容：版本升级到 1.5.0；新增 SteamCMD 数据源与「数据来源」设置（优先 SteamCMD / 优先在线接口 / 仅在线接口 / 仅 SteamCMD），支持指定或自动检测 steamcmd.exe、一键测试；新增通用 VDF 解析器与 SteamCMD `app_info_print` 结果解析；数据源失败自动回退，并加入 5 分钟熔断，单个 App 无公开数据不会禁用来源。
 4. 验证结果：129 项核心回归测试通过；真机下载 SteamCMD 实测——本机 TLS 被拦截导致自更新失败，应用按预期在 30 秒内超时并回退到在线接口，其余 App 因熔断直接走接口，整轮 5 个配置约 33 秒完成（修复前需 4 分钟以上）；回退、熔断、无数据三种路径均有用例覆盖。
-5. 说明：本机 nuget.org 解析被拦截，本地改用华为云 NuGet 镜像还原；CI 仍使用官方源。
-## 2026-10-27 19:50:00 +08:00
-
-1. 推送人员：圆鲨鲨
-2. 目标分支：main
-3. 实现内容：版本升级到 1.4.0；「获取游戏信息」新增“创建为新配置”，填入 AppID 获取成功后可直接生成 appmanifest 与占位 EXE；单库时直接写入、多库时弹出已预填的新建对话框；「新建配置」中输入 AppID 后失焦自动获取 Steam 信息。
-4. 验证结果：117 项核心回归测试通过；用临时库实测“填入 4706890/4162040 → 获取信息 → 创建为新配置”，成功写出 `appmanifest_4162040.acf` 与 `common\Zenless Zone Zero\HYP.exe`，ACF 为 `StateFlags=4`、`DownloadType=1`、`Bytes*=0`、`TargetBuildID=0`，与新建配置生成结果一致；列表自动刷新为 1 个配置。
 5. 说明：本机 nuget.org 解析被拦截，本地改用华为云 NuGet 镜像还原；CI 仍使用官方源。

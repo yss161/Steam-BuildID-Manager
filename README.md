@@ -60,24 +60,25 @@ BuildIdUpdateService ──► api.steamcmd.net/v1/info/<AppID> ──► public
 
 1. 每次推送或提交 Pull Request 时，自动运行 156 项核心回归测试。
 2. 测试通过后，在 `windows-latest` 上以 `win-x64` 自包含方式发布 WinUI 3 应用。
-3. 用 Inno Setup 生成需要管理员权限的全机安装包，并在 CI 中执行静默安装、启动文件检查和静默卸载冒烟测试。
-4. 便携版 `Steam-BuildID-Manager-win-x64.zip` 和安装版 `Steam-BuildID-Manager-Setup-1.8.0.exe` 都会上传到 Actions Artifacts。
+3. 用 Inno Setup 生成免提权的用户级安装包（与原项目一致），并在 CI 中执行静默安装、payload/注册表检查和静默卸载冒烟测试。
+4. 便携版 `Steam-BuildID-Manager-win-x64.zip` 和安装版 `Steam-BuildID-Manager-Setup-1.9.0.exe` 都会上传到 Actions Artifacts。
 5. 推送 `v*` 标签时，两个产物会自动附加到 GitHub Release。
 
 下载方式：
 
-3. **安装版**：从 [Releases](https://github.com/yss161/Steam-BuildID-Manager/releases) 下载 `Steam-BuildID-Manager-Setup-1.8.0.exe`。
+3. **安装版**：从 [Releases](https://github.com/yss161/Steam-BuildID-Manager/releases) 下载 `Steam-BuildID-Manager-Setup-1.9.0.exe`。
 4. **便携版**：从 Releases 下载 `Steam-BuildID-Manager-win-x64.zip`，解压后直接运行。
 5. **最新构建**：打开 [Actions](https://github.com/yss161/Steam-BuildID-Manager/actions/workflows/build.yml)，选择最近一次成功的 `build`，在页面底部下载安装版或便携版。
 
 ## 安装版
 
-1. 双击 `Steam-BuildID-Manager-Setup-1.8.0.exe`，安装程序会自动请求管理员权限，在 UAC 提示中选择“是”即可。
-2. 默认安装到 `C:\Program Files\SteamBuildIDManager`；开始菜单快捷方式对所有用户可见，桌面快捷方式默认不勾选。
+1. 双击 `Steam-BuildID-Manager-Setup-1.9.0.exe` 即可，**不会弹出 UAC 提权提示**。
+2. 默认安装到 `%LocalAppData%\Programs\SteamBuildIDManager`（当前用户目录，无需管理员权限）；开始菜单和桌面快捷方式都属于当前用户，桌面快捷方式默认不勾选。
 3. 安装程序会检测并关闭正在运行的旧版本，安装完成后可直接启动。
-4. 卸载需要管理员权限，入口在 Windows“设置 → 应用 → 已安装的应用”，不会删除用户设置和 ACF 备份。
-5. 安装包界面支持简体中文和英文，按系统语言自动选择。
-6. 不想提权时仍可使用便携版 zip，解压后直接运行，不写注册表。
+4. 卸载不需要管理员权限，入口在 Windows“设置 → 应用 → 已安装的应用”，不会删除用户设置和 ACF 备份。
+5. 安装包界面支持简体中文和英文，按系统语言自动选择，使用 Windows 11 风格向导。
+6. 需要给所有用户安装时，可在安装向导首页选择“为所有用户安装”，此时才需要管理员权限。
+7. 安装开始前会检查临时目录是否可写；不可写时会直接说明位置和处理办法，而不是只报一句“没有写入权限”。
 
 ## 本地构建
 
@@ -148,8 +149,11 @@ A：本工具只写 `appmanifest_*.acf`，并只在占位文件不存在时创�
 **Q：默认列表里为什么没有我的游戏？**
 A：默认只显示 `SizeOnDisk = 0` 的占位配置。打开“显示全部 Steam 游戏”可以查看所有 ACF，但对真实安装的游戏请谨慎操作。
 
-**Q：为什么安装包一定要管理员权限？**
-A：默认安装到 `C:\Program Files` 并写入所有用户的开始菜单，安装和卸载都需要管理员权限。不想提权可直接使用便携版 zip。
+**Q：安装包需要管理员权限吗？**
+A：不需要。默认按当前用户安装到 `%LocalAppData%\Programs\SteamBuildIDManager`，安装和卸载都不提权。只有在向导里主动选择“为所有用户安装”时才需要管理员权限。
+
+**Q：双击安装包提示“临时目录没有写入权限”怎么办？**
+A：安装程序会把自身解压到临时目录，那里不可写就会失败。旧版本用的是全机安装模式，临时目录指向 `C:\Windows\Temp`，权限被收紧时就会报这个错；现在改为用户级安装，临时目录落在 `%LocalAppData%\Temp`，一般不再出现。若仍遇到，按提示把 `TEMP`/`TMP` 改到一个可写目录，或临时关闭安全软件的“受控文件夹访问”，也可以直接使用便携版 zip。
 
 **Q：开启“以管理员身份启动”后没反应？**
 A：启动时会弹出 UAC 提示，取消后应用会以标准权限继续运行，不会崩溃。也可以随时在设置页点“立即以管理员重启”。

@@ -46,6 +46,15 @@ function Find-SignTool {
 
     $onPath = Get-Command 'signtool.exe' -ErrorAction SilentlyContinue
     if ($onPath) { return $onPath.Source }
+
+    # Last resort: some SDK installs do not use the plain "bin\<version>\x64" layout.
+    foreach ($root in $roots) {
+        if (-not (Test-Path $root)) { continue }
+        $found = Get-ChildItem $root -Recurse -Filter 'signtool.exe' -ErrorAction SilentlyContinue |
+            Where-Object { $_.DirectoryName -match '\\x64$' } |
+            Select-Object -First 1
+        if ($found) { return $found.FullName }
+    }
     return $null
 }
 

@@ -12,7 +12,9 @@
 param(
     [string] $SetupPath,
     [string[]] $SetupArguments,
-    [switch] $Wait
+    [switch] $Wait,
+    [switch] $Elevate,
+    [switch] $NoElevate
 )
 
 $ErrorActionPreference = 'Stop'
@@ -67,6 +69,40 @@ function Show-Failure {
     }
     catch {
         Read-Host '按回车键关闭'
+    }
+}
+
+# ── Elevate first when asked ─────────────────────────────────────────────
+# Elevating changes which account's temporary folder is used, so this has to happen
+# before the candidates are probed. Guarded against loops: the relaunched copy carries
+# -NoElevate and the process id check.
+if ($Elevate -and -not $NoElevate) {
+    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
+        ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
+    if (-not $isAdmin) {
+        try {
+            $relaunch = @(
+                '-NoProfile', '-ExecutionPolicy', 'Bypass',
+                '-File', ('"' + $MyInvocation.MyCommand.Path + '"'),
+                '-Elevate', '-NoElevate'
+            )
+            if (-not [string]::IsNullOrWhiteSpace($SetupPath)) {
+                $relaunch += @('-SetupPath', ('"' + $SetupPath + '"'))
+            }
+            if ($Wait) { $relaunch += '-Wait' }
+            if ($SetupArguments) {
+                $relaunch += '-SetupArguments'
+                foreach ($argument in $SetupArguments) { $relaunch += ('"' + $argument + '"') }
+            }
+
+            Start-Process -FilePath 'powershell.exe' -Verb RunAs -ArgumentList $relaunch | Out-Null
+            exit 0
+        }
+        catch {
+            Write-Host ('申请管理员权限被取消或失败：' + $_.Exception.Message)
+            Write-Host '将以当前权限继续，若安装报临时目录错误，请重试并允许 UAC 提示。'
+        }
     }
 }
 

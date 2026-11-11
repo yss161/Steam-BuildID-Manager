@@ -137,15 +137,14 @@ jobs:
       - name: Verify installer is per-user
         shell: pwsh
         run: |
-          # A per-user install keeps Setup's temp folder inside the user profile. Switching
-          # back to PrivilegesRequired=admin moves it to %WINDIR%\Temp and breaks machines
-          # where that folder is read-only ("临时目录没有写入权限").
+          # The installer must request administrator rights: that also moves Inno's own
+          # working directory to %WINDIR%\Temp, which Administrators can always write to.
           $iss = Get-Content "installer/SteamBuildIDManager.iss" -Raw
-          if ($iss -notmatch '(?m)^\s*PrivilegesRequired\s*=\s*lowest\s*$') {
-            throw "The installer must stay per-user (PrivilegesRequired=lowest)."
+          if ($iss -notmatch '(?m)^\s*PrivilegesRequired\s*=\s*admin\s*$') {
+            throw "The installer must request administrator rights (PrivilegesRequired=admin)."
           }
-          if ($iss -match '(?m)^\s*DefaultDirName\s*=\s*\{autopf\}') {
-            throw "The installer must not default to Program Files."
+          if ($iss -notmatch '(?m)^\s*DefaultDirName\s*=\s*\{autopf\}') {
+            throw "An all-users install must default to {autopf}."
           }
           # A temp-folder pre-check inside the .iss cannot work: Inno extracts itself
           # before any [Code] runs. The launcher is what fixes an unwritable TEMP.
@@ -261,12 +260,11 @@ jobs:
           if (-not (Test-Path (Join-Path $dir "steamcmd\steamcmd.exe"))) { throw "The installed bundle is missing the SteamCMD payload." }
           if (-not (Test-Path (Join-Path $dir "SteamBuildIDManager.pri"))) { throw "Installed PRI is missing." }
 
-          # The installer is per-user (PrivilegesRequired=lowest): it must register under
-          # HKCU and must never require elevation.
-          $key = Get-ChildItem "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall" |
+          # PrivilegesRequired=admin must register the app machine-wide, not per user.
+          $key = Get-ChildItem "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall" |
             Where-Object { (Get-ItemProperty $_.PSPath).DisplayName -like "*BuildID*" } |
             Select-Object -First 1
-          if (-not $key) { throw "Per-user uninstall entry was not created." }
+          if (-not $key) { throw "Machine-wide uninstall entry was not created." }
 
           $uninstall = Start-Process -FilePath (Join-Path $dir "unins000.exe") `
             -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' `
@@ -277,9 +275,9 @@ jobs:
           }
           if (Test-Path (Join-Path $dir "SteamBuildIDManager.exe")) { throw "Uninstaller left files behind." }
 
-          $leftover = Get-ChildItem "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall" |
+          $leftover = Get-ChildItem "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall" |
             Where-Object { (Get-ItemProperty $_.PSPath).DisplayName -like "*BuildID*" }
-          if ($leftover) { throw "Uninstaller left the per-user registry entry behind." }
+          if ($leftover) { throw "Uninstaller left the machine-wide registry entry behind." }
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4

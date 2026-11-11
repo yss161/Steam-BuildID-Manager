@@ -10,7 +10,7 @@ if not exist "%SCRIPT%" (
   pause
   exit /b 1
 )
-powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%SCRIPT%" %*
+powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%SCRIPT%" -Elevate %*
 set "CODE=%ERRORLEVEL%"
 if not "%CODE%"=="0" pause
 exit /b %CODE%

@@ -60,25 +60,25 @@ BuildIdUpdateService ──► api.steamcmd.net/v1/info/<AppID> ──► public
 
 1. 每次推送或提交 Pull Request 时，自动运行 156 项核心回归测试。
 2. 测试通过后，在 `windows-latest` 上以 `win-x64` 自包含方式发布 WinUI 3 应用。
-3. 用 Inno Setup 生成免提权的用户级安装包（与原项目一致），并在 CI 中执行静默安装、payload/注册表检查和静默卸载冒烟测试。
-4. 便携版 `Steam-BuildID-Manager-win-x64.zip` 和安装版 `Steam-BuildID-Manager-Setup-1.9.2.exe` 都会上传到 Actions Artifacts。
+3. 用 Inno Setup 生成请求管理员权限的全机安装包，并在 CI 中执行静默安装、payload/注册表检查和静默卸载冒烟测试。
+4. 便携版 `Steam-BuildID-Manager-win-x64.zip` 和安装版 `Steam-BuildID-Manager-Setup-1.9.3.exe` 都会上传到 Actions Artifacts。
 5. 推送 `v*` 标签时，两个产物会自动附加到 GitHub Release。
 
 下载方式：
 
-3. **安装版**：从 [Releases](https://github.com/yss161/Steam-BuildID-Manager/releases) 下载 `Steam-BuildID-Manager-Setup-1.9.2.exe`。
+3. **安装版**：从 [Releases](https://github.com/yss161/Steam-BuildID-Manager/releases) 下载 `Steam-BuildID-Manager-Setup-1.9.3.exe`。
 4. **便携版**：从 Releases 下载 `Steam-BuildID-Manager-win-x64.zip`，解压后直接运行。
 5. **最新构建**：打开 [Actions](https://github.com/yss161/Steam-BuildID-Manager/actions/workflows/build.yml)，选择最近一次成功的 `build`，在页面底部下载安装版或便携版。
 
 ## 安装版
 
-1. 双击 `Steam-BuildID-Manager-Setup-1.9.2.exe` 即可，**不会弹出 UAC 提权提示**。
-2. 默认安装到 `%LocalAppData%\Programs\SteamBuildIDManager`（当前用户目录，无需管理员权限）；开始菜单和桌面快捷方式都属于当前用户，桌面快捷方式默认不勾选。
+1. 双击 `Steam-BuildID-Manager-Setup-1.9.3.exe`，安装程序会**立即申请管理员权限**，在 UAC 提示中选择“是”即可。
+2. 默认安装到 `C:\Program Files\SteamBuildIDManager`；开始菜单快捷方式对所有用户可见，桌面快捷方式默认不勾选。
 3. 安装程序会检测并关闭正在运行的旧版本，安装完成后可直接启动。
-4. 卸载不需要管理员权限，入口在 Windows“设置 → 应用 → 已安装的应用”，不会删除用户设置和 ACF 备份。
+4. 卸载同样需要管理员权限，入口在 Windows“设置 → 应用 → 已安装的应用”，不会删除用户设置和 ACF 备份。
 5. 安装包界面支持简体中文和英文，按系统语言自动选择，使用 Windows 11 风格向导。
-6. 需要给所有用户安装时，可在安装向导首页选择“为所有用户安装”，此时才需要管理员权限。
-7. 安装开始前会检查临时目录是否可写；不可写时会直接说明位置和处理办法，而不是只报一句“没有写入权限”。
+6. 只想装给当前用户时，可在安装向导首页改选“仅为我安装”，安装到 `%LocalAppData%\Programs\SteamBuildIDManager`。
+7. 提权后会以管理员账号运行，临时目录随之改用该账号的目录；若是**同账号**的 UAC 同意式提权，临时目录不变，此步仍可能失败——那就改用下面的 `Start-Setup.cmd`。
 
 ## 本地构建
 
@@ -213,7 +213,7 @@ A：本工具只写 `appmanifest_*.acf`，并只在占位文件不存在时创�
 A：默认只显示 `SizeOnDisk = 0` 的占位配置。打开“显示全部 Steam 游戏”可以查看所有 ACF，但对真实安装的游戏请谨慎操作。
 
 **Q：安装包需要管理员权限吗？**
-A：不需要。默认按当前用户安装到 `%LocalAppData%\Programs\SteamBuildIDManager`，安装和卸载都不提权。只有在向导里主动选择“为所有用户安装”时才需要管理员权限。
+A：需要。双击后会立即弹出 UAC 提示，安装到 `C:\Program Files` 并写入所有用户的开始菜单，卸载同样需要提权。只想装给当前用户时，可在向导首页改选“仅为我安装”。
 
 **Q：双击安装包报「安装程序无法创建目录 … 错误 5: 拒绝访问」怎么办？**
 A：把 `Start-Setup.cmd` 和 `Start-Setup.ps1` 放到安装包同一个文件夹，双击 `Start-Setup.cmd`。它会先挑一个真正可写的临时目录再启动安装程序，**你看到的仍然是正常的安装向导页面**。详见「安装包无法使用临时目录」。

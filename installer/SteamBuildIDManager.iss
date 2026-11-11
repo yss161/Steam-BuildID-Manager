@@ -4,7 +4,7 @@
 
 #define MyAppName "Steam BuildID 管理器"
 #define MyAppIdName "SteamBuildIDManager"
-#define MyAppVersion "1.9.2"
+#define MyAppVersion "1.9.3"
 #define MyAppPublisher "yss161"
 #define MyAppURL "https://github.com/yss161/Steam-BuildID-Manager"
 #define MyAppExeName "SteamBuildIDManager.exe"
@@ -22,13 +22,15 @@ AppSupportURL={#MyAppURL}/issues
 AppUpdatesURL={#MyAppURL}/releases
 AppCopyright=Copyright (C) 2026 Violet0923, yss161
 
-; Install per user, exactly like the original project. This needs no UAC prompt and
-; keeps Setup's temporary folder inside the user profile: an administrative install
-; extracts to %WINDIR%\Temp, and on machines where that folder is not writable for
-; the elevated token Setup fails with a bare "临时目录没有写入权限" message.
-PrivilegesRequired=lowest
+; Ask for administrator rights as soon as the installer starts, and install for all users.
+; Elevation also switches Setup to the account that owns the UAC token; if that is a
+; different profile, its temp folder is used instead of the one that was refusing writes
+; ("错误 5: 拒绝访问"). Same-account consent keeps the original temp folder, which is why
+; Start-Setup.cmd still ships as a fallback.
+; Users who prefer a per-user install can still pick it in the first wizard page.
+PrivilegesRequired=admin
 PrivilegesRequiredOverridesAllowed=dialog
-DefaultDirName={localappdata}\Programs\{#MyAppIdName}
+DefaultDirName={autopf}\{#MyAppIdName}
 UninstallDisplayIcon={app}\{#MyAppExeName}
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -44,7 +46,7 @@ MinVersion=10.0.17763
 CloseApplications=yes
 CloseApplicationsFilter={#MyAppExeName}
 RestartApplications=no
-VersionInfoVersion=1.9.2.0
+VersionInfoVersion=1.9.3.0
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription={#MyAppName} 安装程序
 VersionInfoProductName={#MyAppName}

@@ -134,7 +134,7 @@ jobs:
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
 
-      - name: Verify installer is per-user
+      - name: Verify installer requests admin
         shell: pwsh
         run: |
           # The installer must request administrator rights: that also moves Inno's own

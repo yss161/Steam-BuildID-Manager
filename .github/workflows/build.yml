@@ -196,41 +196,42 @@ jobs:
         run: |
           # Reproduce the reported failure: Inno extracts itself into %TEMP% before any [Code]
           # runs, so a TEMP the user cannot write to aborts with "Error 5: Access is denied".
-          # Start-Setup.cmd must pick a different folder and complete a real install.
+          # Start-Setup.ps1 must pick another folder and complete a real install.
           $setup = (Get-ChildItem "artifacts/installer" -Filter "*Setup*.exe" | Select-Object -First 1).FullName
-          $launcher = "artifacts/installer/Start-Setup.ps1"
+          $launcher = (Resolve-Path "artifacts/installer/Start-Setup.ps1").Path
 
           $broken = Join-Path $env:RUNNER_TEMP ("sbim-broken-" + [guid]::NewGuid().ToString('N'))
           New-Item -ItemType Directory -Path $broken -Force | Out-Null
           & icacls $broken /deny "$($env:USERNAME):(OI)(CI)(W)" | Out-Null
 
-          # Also block the launcher's first choice so it has to fall through the list.
+          # Also block the launcher's first choice so it has to walk down the candidate list.
           $firstChoice = Join-Path $env:LOCALAPPDATA "SteamBuildIDManager\InstallTemp"
           New-Item -ItemType Directory -Path $firstChoice -Force | Out-Null
           & icacls $firstChoice /deny "$($env:USERNAME):(OI)(CI)(W)" | Out-Null
 
-          $savedTemp = $env:TEMP
-          $savedTmp = $env:TMP
-          $env:TEMP = $broken
-          $env:TMP = $broken
-
           $dir = Join-Path $env:RUNNER_TEMP ("sbim-launcher-" + [guid]::NewGuid().ToString('N'))
+
+          # pwsh -File cannot bind a string[] parameter, so the array literal must live
+          # inside a wrapper script instead of on the command line.
+          $wrapper = Join-Path $env:RUNNER_TEMP "sbim-launcher-test.ps1"
+          $lines = @(
+            "`$env:TEMP = '$broken'",
+            "`$env:TMP = '$broken'",
+            "& '$launcher' -SetupPath '$setup' -Wait -SetupArguments @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/NOICONS','/DIR=$dir')",
+            "exit `$LASTEXITCODE"
+          )
+          Set-Content -Path $wrapper -Value $lines -Encoding UTF8
+
           try {
-            $p = Start-Process -FilePath "pwsh" -Wait -PassThru -ArgumentList @(
-              '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $launcher,
-              '-SetupPath', $setup,
-              '-Wait',
-              '-SetupArguments', '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/NOICONS', "/DIR=$dir"
-            )
+            $p = Start-Process -FilePath "pwsh" -Wait -PassThru `
+              -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $wrapper)
             if ($p.ExitCode -ne 0) { throw "Launcher path failed with exit code $($p.ExitCode)." }
             if (-not (Test-Path (Join-Path $dir "SteamBuildIDManager.exe"))) {
               throw "The launcher did not complete an install while TEMP was unwritable."
             }
-            Write-Host "Launcher installed successfully with a blocked TEMP."
+            Write-Host "Launcher installed successfully while TEMP was blocked."
           }
           finally {
-            $env:TEMP = $savedTemp
-            $env:TMP = $savedTmp
             & icacls $broken /remove:d "$($env:USERNAME)" 2>$null | Out-Null
             & icacls $firstChoice /remove:d "$($env:USERNAME)" 2>$null | Out-Null
           }
@@ -238,6 +239,12 @@ jobs:
           $uninstall = Start-Process -FilePath (Join-Path $dir "unins000.exe") `
             -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -PassThru
           if ($uninstall.ExitCode -ne 0) { throw "Uninstaller exited with code $($uninstall.ExitCode)." }
+          for ($i = 0; $i -lt 30 -and (Test-Path (Join-Path $dir "SteamBuildIDManager.exe")); $i++) {
+            Start-Sleep -Seconds 1
+          }
+          if (Test-Path (Join-Path $dir "SteamBuildIDManager.exe")) {
+            throw "Uninstaller left files behind after the launcher install."
+          }
 
       - name: Smoke test install and uninstall
         shell: pwsh

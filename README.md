@@ -61,18 +61,18 @@ BuildIdUpdateService ──► api.steamcmd.net/v1/info/<AppID> ──► public
 1. 每次推送或提交 Pull Request 时，自动运行 156 项核心回归测试。
 2. 测试通过后，在 `windows-latest` 上以 `win-x64` 自包含方式发布 WinUI 3 应用。
 3. 用 Inno Setup 生成免提权的用户级安装包（与原项目一致），并在 CI 中执行静默安装、payload/注册表检查和静默卸载冒烟测试。
-4. 便携版 `Steam-BuildID-Manager-win-x64.zip` 和安装版 `Steam-BuildID-Manager-Setup-1.9.1.exe` 都会上传到 Actions Artifacts。
+4. 便携版 `Steam-BuildID-Manager-win-x64.zip` 和安装版 `Steam-BuildID-Manager-Setup-1.9.2.exe` 都会上传到 Actions Artifacts。
 5. 推送 `v*` 标签时，两个产物会自动附加到 GitHub Release。
 
 下载方式：
 
-3. **安装版**：从 [Releases](https://github.com/yss161/Steam-BuildID-Manager/releases) 下载 `Steam-BuildID-Manager-Setup-1.9.1.exe`。
+3. **安装版**：从 [Releases](https://github.com/yss161/Steam-BuildID-Manager/releases) 下载 `Steam-BuildID-Manager-Setup-1.9.2.exe`。
 4. **便携版**：从 Releases 下载 `Steam-BuildID-Manager-win-x64.zip`，解压后直接运行。
 5. **最新构建**：打开 [Actions](https://github.com/yss161/Steam-BuildID-Manager/actions/workflows/build.yml)，选择最近一次成功的 `build`，在页面底部下载安装版或便携版。
 
 ## 安装版
 
-1. 双击 `Steam-BuildID-Manager-Setup-1.9.1.exe` 即可，**不会弹出 UAC 提权提示**。
+1. 双击 `Steam-BuildID-Manager-Setup-1.9.2.exe` 即可，**不会弹出 UAC 提权提示**。
 2. 默认安装到 `%LocalAppData%\Programs\SteamBuildIDManager`（当前用户目录，无需管理员权限）；开始菜单和桌面快捷方式都属于当前用户，桌面快捷方式默认不勾选。
 3. 安装程序会检测并关闭正在运行的旧版本，安装完成后可直接启动。
 4. 卸载不需要管理员权限，入口在 Windows“设置 → 应用 → 已安装的应用”，不会删除用户设置和 ACF 备份。
@@ -135,6 +135,31 @@ installer/                      Inno Setup 安装包脚本与简体中文语言�
 
 > 这些检查只说明“没有已知冲突”，不保证实时最新。来源本身也可能滞后，界面显示的查询时间是接收时间，不是发布时间。
 
+## 安装包无法使用临时目录
+
+如果双击安装包报：
+
+```
+安装程序无法创建目录 "C:\Users\…\Temp\is-XXXXXXXX.tmp"。
+错误 5: 拒绝访问。
+```
+
+**原因**：Inno Setup 的安装程序会先把自身解压到 `%TEMP%\is-XXXX.tmp` 才能运行，这一步发生在**任何安装脚本代码之前**。所以只要这台机器的临时目录写不进去（权限被改坏、磁盘满、或安全软件拦截），安装包就会在启动阶段直接失败，**安装程序内部改什么都救不了**。
+
+**解决办法**：用随附的启动器。
+
+1. 把 `Start-Setup.cmd` 和 `Start-Setup.ps1` 与安装包放在**同一个文件夹**（便携版 zip 的 `installer\` 目录里已经带好了）。
+2. 双击 `Start-Setup.cmd`。
+3. 启动器会依次尝试这些位置，用「真正创建一个文件夹」来验证可写性：
+   1. `%LocalAppData%\SteamBuildIDManager\InstallTemp`（程序本来就写这里，最可能可用）
+   2. 系统 `TEMP` / `TMP`
+   3. 安装包所在目录下的 `Temp`
+   4. 系统盘根目录的 `SBIM-Temp`
+4. 选中后把 `TEMP`/`TMP` 指向它，再启动安装程序 —— **向导界面与正常安装完全一样**。
+5. 如果四个位置都不可写，启动器会列出每个位置的失败情况，并给出后续建议（改用便携版 zip 等）。
+
+> 注意：不要用「关闭系统防护」来绕过这个错误，那会把所有软件的风险一起承担。启动器只是换了一个可写的临时目录，不修改任何系统安全设置。
+
 ## SmartScreen 提示说明
 
 首次运行时会看到「Windows 已保护你的电脑 / Microsoft Defender SmartScreen 阻止了无法识别的应用启动」。
@@ -190,8 +215,8 @@ A：默认只显示 `SizeOnDisk = 0` 的占位配置。打开“显示全部 Ste
 **Q：安装包需要管理员权限吗？**
 A：不需要。默认按当前用户安装到 `%LocalAppData%\Programs\SteamBuildIDManager`，安装和卸载都不提权。只有在向导里主动选择“为所有用户安装”时才需要管理员权限。
 
-**Q：双击安装包提示“临时目录没有写入权限”怎么办？**
-A：安装程序会把自身解压到临时目录，那里不可写就会失败。旧版本用的是全机安装模式，临时目录指向 `C:\Windows\Temp`，权限被收紧时就会报这个错；现在改为用户级安装，临时目录落在 `%LocalAppData%\Temp`，一般不再出现。若仍遇到，按提示把 `TEMP`/`TMP` 改到一个可写目录，或临时关闭安全软件的“受控文件夹访问”，也可以直接使用便携版 zip。
+**Q：双击安装包报「安装程序无法创建目录 … 错误 5: 拒绝访问」怎么办？**
+A：把 `Start-Setup.cmd` 和 `Start-Setup.ps1` 放到安装包同一个文件夹，双击 `Start-Setup.cmd`。它会先挑一个真正可写的临时目录再启动安装程序，**你看到的仍然是正常的安装向导页面**。详见「安装包无法使用临时目录」。
 
 **Q：开启“以管理员身份启动”后没反应？**
 A：启动时会弹出 UAC 提示，取消后应用会以标准权限继续运行，不会崩溃。也可以随时在设置页点“立即以管理员重启”。

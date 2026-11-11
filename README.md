@@ -61,18 +61,18 @@ BuildIdUpdateService ──► api.steamcmd.net/v1/info/<AppID> ──► public
 1. 每次推送或提交 Pull Request 时，自动运行 156 项核心回归测试。
 2. 测试通过后，在 `windows-latest` 上以 `win-x64` 自包含方式发布 WinUI 3 应用。
 3. 用 Inno Setup 生成免提权的用户级安装包（与原项目一致），并在 CI 中执行静默安装、payload/注册表检查和静默卸载冒烟测试。
-4. 便携版 `Steam-BuildID-Manager-win-x64.zip` 和安装版 `Steam-BuildID-Manager-Setup-1.9.0.exe` 都会上传到 Actions Artifacts。
+4. 便携版 `Steam-BuildID-Manager-win-x64.zip` 和安装版 `Steam-BuildID-Manager-Setup-1.9.1.exe` 都会上传到 Actions Artifacts。
 5. 推送 `v*` 标签时，两个产物会自动附加到 GitHub Release。
 
 下载方式：
 
-3. **安装版**：从 [Releases](https://github.com/yss161/Steam-BuildID-Manager/releases) 下载 `Steam-BuildID-Manager-Setup-1.9.0.exe`。
+3. **安装版**：从 [Releases](https://github.com/yss161/Steam-BuildID-Manager/releases) 下载 `Steam-BuildID-Manager-Setup-1.9.1.exe`。
 4. **便携版**：从 Releases 下载 `Steam-BuildID-Manager-win-x64.zip`，解压后直接运行。
 5. **最新构建**：打开 [Actions](https://github.com/yss161/Steam-BuildID-Manager/actions/workflows/build.yml)，选择最近一次成功的 `build`，在页面底部下载安装版或便携版。
 
 ## 安装版
 
-1. 双击 `Steam-BuildID-Manager-Setup-1.9.0.exe` 即可，**不会弹出 UAC 提权提示**。
+1. 双击 `Steam-BuildID-Manager-Setup-1.9.1.exe` 即可，**不会弹出 UAC 提权提示**。
 2. 默认安装到 `%LocalAppData%\Programs\SteamBuildIDManager`（当前用户目录，无需管理员权限）；开始菜单和桌面快捷方式都属于当前用户，桌面快捷方式默认不勾选。
 3. 安装程序会检测并关闭正在运行的旧版本，安装完成后可直接启动。
 4. 卸载不需要管理员权限，入口在 Windows“设置 → 应用 → 已安装的应用”，不会删除用户设置和 ACF 备份。
@@ -135,6 +135,44 @@ installer/                      Inno Setup 安装包脚本与简体中文语言�
 
 > 这些检查只说明“没有已知冲突”，不保证实时最新。来源本身也可能滞后，界面显示的查询时间是接收时间，不是发布时间。
 
+## SmartScreen 提示说明
+
+首次运行时会看到「Windows 已保护你的电脑 / Microsoft Defender SmartScreen 阻止了无法识别的应用启动」。
+
+**原因**：这是 Windows 对「从网络下载 + 没有代码签名 + 尚无下载信誉」的程序的标准提示，与你本机的安全设置无关，只关系到这个文件本身有没有签名。它出现在安装包启动之前，所以安装程序内部做的任何处理（包括安装完成后自动解除文件锁定）都无法阻止它。
+
+**三种处理方式**：
+
+1. **直接继续**：点「更多信息」→「仍要运行」。这是官方给出的正常途径，仅需一次。
+2. **用便携版**：下载 `Steam-BuildID-Manager-win-x64.zip` 后，先右键 zip →「属性」→ 勾选「解除锁定」，再解压运行 `SteamBuildIDManager.exe`。
+3. **消除提示**：只有给程序签名才能彻底解决，见下方「代码签名」。
+
+> 提示内容里的「发布者：发布者未知」就是「没有签名」的直接体现。任何号称能不改签名就永久消除此提示的说法，本质上都是在让你关闭系统防护，不建议采用。
+
+### 代码签名
+
+彻底消除提示需要有效的 Authenticode 证书。本项目已内置签名管线 `installer/sign.ps1`，配置证书后本地构建和 GitHub Actions 都会自动签名并校验：
+
+1. **免费（推荐开源项目）**：[SignPath Foundation](https://signpath.org/) 为开源项目免费提供签名，证书以其基金会名义签发，可证明二进制确实来自本仓库的构建。
+2. **付费 EV 证书**：SmartScreen 对 EV 证书立即给予信誉，提示立刻消失，但需要企业资质和较高的年费。
+3. **付费 OV 证书**：价格较低，但**仍需累积下载量**才能让 SmartScreen 停止提示，不能立刻解决。
+
+配置方式（GitHub 仓库 → Settings → Secrets → Actions）：
+
+1. 添加 `SIGNING_PFX_BASE64`：PFX 证书文件的 Base64 文本。
+2. 添加 `SIGNING_PFX_PASSWORD`：PFX 密码。
+3. 或者改用 `SIGNING_THUMBPRINT`：证书已安装到构建机证书存储时使用。
+
+未配置任何证书时，构建照常成功，产物保持未签名，日志会明确说明这一点。
+
+本地签名：
+
+```powershell
+pwsh -File installer/sign.ps1 -PfxPath mycert.pfx -PfxPassword 你的密码
+```
+
+`steamcmd.exe` 由 Valve 官方签名，签名脚本会自动跳过它，不会覆盖他人签名。
+
 ## 常见问题
 
 **Q：检测失败怎么办？**
@@ -162,7 +200,7 @@ A：启动时会弹出 UAC 提示，取消后应用会以标准权限继续运�
 A：不会。程序只记录图片的绝对路径并直接读取；图片被移动或删除后会自动隐藏背景层，界面照常使用。
 
 **Q：运行时弹出“Windows 已保护你的电脑”怎么办？**
-A：这是 SmartScreen 对“带网络来源标记且未签名”的程序提示。安装版在安装完成时会自动解除文件锁定，正常安装后不会再弹；便携版可先右键 `Unblock.cmd` → 以管理员身份运行（或双击），再启动主程序。要从根本上消除提示需要代码签名证书，程序本身无法绕过。
+A：点「更多信息」→「仍要运行」即可；便携版可先解锁 zip 再解压。这是未签名程序的固定提示，出现在安装包启动之前，程序内部无法阻止，只有代码签名能彻底消除，详见「SmartScreen 提示说明」。
 
 **Q：安装包需要联网下载 SteamCMD 吗？**
 A：不需要。安装包已内置 Valve 官方 `steamcmd.exe`，首次检测时会自动部署到 `%LocalAppData%\SteamBuildIDManager\steamcmd`。该副本仍会在首次运行时联网做自更新（Valve 的机制），若网络受限请改用「仅在线接口」，或先手动解压 `steamcmd.zip` 再用“浏览”指定路径。

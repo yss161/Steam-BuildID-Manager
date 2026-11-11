@@ -4,7 +4,7 @@
 
 #define MyAppName "Steam BuildID 管理器"
 #define MyAppIdName "SteamBuildIDManager"
-#define MyAppVersion "1.9.0"
+#define MyAppVersion "1.9.1"
 #define MyAppPublisher "yss161"
 #define MyAppURL "https://github.com/yss161/Steam-BuildID-Manager"
 #define MyAppExeName "SteamBuildIDManager.exe"
@@ -44,7 +44,7 @@ MinVersion=10.0.17763
 CloseApplications=yes
 CloseApplicationsFilter={#MyAppExeName}
 RestartApplications=no
-VersionInfoVersion=1.9.0.0
+VersionInfoVersion=1.9.1.0
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription={#MyAppName} 安装程序
 VersionInfoProductName={#MyAppName}

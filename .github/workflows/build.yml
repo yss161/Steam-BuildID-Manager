@@ -78,6 +78,21 @@ jobs:
             throw "The bundled SteamCMD payload is missing."
           }
 
+      - name: Sign the published executable
+        shell: pwsh
+        # Optional: signs only when a certificate secret is configured. Unsigned builds
+        # still succeed, they just keep triggering the SmartScreen "unknown publisher" prompt.
+        env:
+          SIGNING_PFX_BASE64: ${{ secrets.SIGNING_PFX_BASE64 }}
+          SIGNING_PFX_PASSWORD: ${{ secrets.SIGNING_PFX_PASSWORD }}
+          SIGNING_THUMBPRINT: ${{ secrets.SIGNING_THUMBPRINT }}
+        run: |
+          pwsh -File installer/sign.ps1 `
+            -PfxBase64 "$env:SIGNING_PFX_BASE64" `
+            -PfxPassword "$env:SIGNING_PFX_PASSWORD" `
+            -Thumbprint "$env:SIGNING_THUMBPRINT" `
+            -Targets "publish/SteamBuildIDManager.exe"
+
       - name: Create portable zip
         shell: pwsh
         run: Compress-Archive -Path publish\* -DestinationPath Steam-BuildID-Manager-win-x64.zip -CompressionLevel Optimal
@@ -137,6 +152,21 @@ jobs:
           if (-not $iscc) { throw "ISCC.exe was not found after installing Inno Setup." }
           & $iscc "installer\SteamBuildIDManager.iss"
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed with exit code $LASTEXITCODE." }
+
+      - name: Sign the installer
+        shell: pwsh
+        env:
+          SIGNING_PFX_BASE64: ${{ secrets.SIGNING_PFX_BASE64 }}
+          SIGNING_PFX_PASSWORD: ${{ secrets.SIGNING_PFX_PASSWORD }}
+          SIGNING_THUMBPRINT: ${{ secrets.SIGNING_THUMBPRINT }}
+        run: |
+          $setup = Get-ChildItem "artifacts/installer" -Filter "*.exe" | Select-Object -First 1
+          pwsh -File installer/sign.ps1 `
+            -PfxBase64 "$env:SIGNING_PFX_BASE64" `
+            -PfxPassword "$env:SIGNING_PFX_PASSWORD" `
+            -Thumbprint "$env:SIGNING_THUMBPRINT" `
+            -Targets $setup.FullName `
+            -Description "Steam BuildID Manager 安装程序"
 
       - name: Smoke test install and uninstall
         shell: pwsh
